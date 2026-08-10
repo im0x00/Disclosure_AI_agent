@@ -1,0 +1,23 @@
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Generated local output
+artifacts/
+outputs/
