@@ -21,3 +21,6 @@ build/
 # Generated local output
 artifacts/
 outputs/
+
+corpus/raw/
+corpus/derived/

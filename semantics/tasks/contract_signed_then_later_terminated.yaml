@@ -1,0 +1,15 @@
+id: contract_signed_then_later_terminated
+kind: task
+status: draft
+
+meaning: >-
+
+inputs:
+  search:
+    - entity:
+    - scope:
+        - 단일판매ㆍ공급계약체결
+    - period:
+        start: 2025-01-01
+        end: 2025-12-31
+
