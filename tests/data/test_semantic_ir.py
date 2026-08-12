@@ -64,6 +64,15 @@ def test_dart_semantic_keys_and_machine_values_are_exposed() -> None:
     assert fields["CRP_NM"]["text"] == "현대제철"
 
 
+def test_html_entity_whitespace_is_not_reported_as_unmapped_text() -> None:
+    document = CorpusCatalog(CORPUS).read_document("periodic", "20240514001522")
+    artifact = next(item for item in document.artifacts if item.envelope.file_role == "viewer-html")
+    ir = build_semantic_ir(parse_artifact(artifact), document.metadata)
+
+    assert ir["diagnostics"]["all_non_whitespace_text_mapped"] is True
+    assert ir["diagnostics"]["non_whitespace_text_node_count"] == 79
+
+
 def test_derived_writer_mirrors_raw_path_and_resumes(tmp_path: Path) -> None:
     output = tmp_path / DERIVED_LAYOUT
     first = derive_corpus(

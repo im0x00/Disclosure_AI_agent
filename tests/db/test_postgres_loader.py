@@ -33,6 +33,9 @@ def test_existing_structured_sources_have_normalized_join_keys() -> None:
     assert {document["corp_code"] for document in documents} <= {
         company["corp_code"] for company in companies
     }
+    null_subtypes = [document for document in documents if document["doc_subtype"] is None]
+    assert len(null_subtypes) == 598
+    assert {document["doc_group"] for document in null_subtypes} == {"major"}
 
 
 def test_structured_load_is_idempotent_upsert_shape() -> None:
@@ -57,6 +60,14 @@ def test_migration_defines_unicode_and_queryable_ir_tables() -> None:
         "CREATE OR REPLACE VIEW disclosure.company_artifact_join",
     ):
         assert required in sql
+    assert "doc_subtype text," in sql
+    assert "doc_subtype text NOT NULL" not in sql
+    assert "semantic_cell (semantic_key, machine_value)" not in sql
+    assert "semantic_field (semantic_key, machine_value)" not in sql
+    assert "semantic_cell (md5(display_text_nfc))" in sql
+    assert "semantic_field (semantic_key, md5(machine_value))" in sql
+    assert "semantic_block (text_value_nfc)" not in sql
+    assert "context_labels_nfc_gin" not in sql
 
 
 def test_derived_reader_refuses_in_progress_tree(tmp_path: Path) -> None:

@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS disclosure.disclosure_document (
     industry text,
     sector text,
     doc_group text NOT NULL CHECK (doc_group IN ('periodic', 'major', 'exchange', 'holding')),
-    doc_subtype text NOT NULL,
+    doc_subtype text,
     report_nm text NOT NULL,
     report_nm_nfc text NOT NULL,
     report_nm_nfd text NOT NULL,
@@ -156,8 +156,8 @@ CREATE TABLE IF NOT EXISTS disclosure.semantic_section (
         REFERENCES disclosure.semantic_section (source_path, section_id)
         DEFERRABLE INITIALLY DEFERRED
 );
-CREATE INDEX IF NOT EXISTS semantic_section_title_nfc_idx
-    ON disclosure.semantic_section (title_nfc);
+CREATE INDEX IF NOT EXISTS semantic_section_title_nfc_hash_idx
+    ON disclosure.semantic_section (md5(title_nfc)) WHERE title_nfc IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS disclosure.semantic_field (
     source_path text NOT NULL REFERENCES disclosure.semantic_ir (source_path) ON DELETE CASCADE,
@@ -181,9 +181,12 @@ CREATE TABLE IF NOT EXISTS disclosure.semantic_field (
         DEFERRABLE INITIALLY DEFERRED
 );
 CREATE INDEX IF NOT EXISTS semantic_field_key_idx
-    ON disclosure.semantic_field (semantic_key, machine_value);
-CREATE INDEX IF NOT EXISTS semantic_field_text_nfc_idx
-    ON disclosure.semantic_field (display_text_nfc);
+    ON disclosure.semantic_field (semantic_key) WHERE semantic_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS semantic_field_key_value_hash_idx
+    ON disclosure.semantic_field (semantic_key, md5(machine_value))
+    WHERE semantic_key IS NOT NULL AND machine_value IS NOT NULL;
+CREATE INDEX IF NOT EXISTS semantic_field_text_nfc_hash_idx
+    ON disclosure.semantic_field (md5(display_text_nfc)) WHERE display_text_nfc IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS disclosure.semantic_block (
     source_path text NOT NULL REFERENCES disclosure.semantic_ir (source_path) ON DELETE CASCADE,
@@ -211,8 +214,8 @@ CREATE TABLE IF NOT EXISTS disclosure.semantic_block (
         DEFERRABLE INITIALLY DEFERRED
 );
 CREATE INDEX IF NOT EXISTS semantic_block_kind_idx ON disclosure.semantic_block (kind);
-CREATE INDEX IF NOT EXISTS semantic_block_text_nfc_idx
-    ON disclosure.semantic_block (text_value_nfc);
+CREATE INDEX IF NOT EXISTS semantic_block_text_nfc_hash_idx
+    ON disclosure.semantic_block (md5(text_value_nfc)) WHERE text_value_nfc IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS disclosure.semantic_table_row (
     source_path text NOT NULL,
@@ -254,11 +257,12 @@ CREATE TABLE IF NOT EXISTS disclosure.semantic_cell (
         ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS semantic_cell_key_idx
-    ON disclosure.semantic_cell (semantic_key, machine_value);
-CREATE INDEX IF NOT EXISTS semantic_cell_text_nfc_idx
-    ON disclosure.semantic_cell (display_text_nfc);
-CREATE INDEX IF NOT EXISTS semantic_cell_context_labels_nfc_gin
-    ON disclosure.semantic_cell USING gin (context_labels_nfc);
+    ON disclosure.semantic_cell (semantic_key) WHERE semantic_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS semantic_cell_key_value_hash_idx
+    ON disclosure.semantic_cell (semantic_key, md5(machine_value))
+    WHERE semantic_key IS NOT NULL AND machine_value IS NOT NULL;
+CREATE INDEX IF NOT EXISTS semantic_cell_text_nfc_hash_idx
+    ON disclosure.semantic_cell (md5(display_text_nfc)) WHERE display_text_nfc IS NOT NULL;
 
 CREATE OR REPLACE VIEW disclosure.company_artifact_join AS
 SELECT c.corp_code, c.stock_code, c.corp_name, a.source_path, a.receipt_no, a.file_role

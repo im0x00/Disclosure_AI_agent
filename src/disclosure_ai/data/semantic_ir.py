@@ -543,7 +543,7 @@ class _IrBuilder:
         if node.kind is not NodeKind.TEXT:
             return False
         raw = self.source[node.start_byte : node.end_byte]
-        return bool(raw.strip(b" \t\r\n\f\x00"))
+        return bool(_display_text([self._decode(raw)]))
 
     @staticmethod
     def _evidence(node: CstNode) -> dict[str, int]:

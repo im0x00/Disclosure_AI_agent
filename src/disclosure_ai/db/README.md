@@ -47,6 +47,17 @@ FROM disclosure.semantic_section
 WHERE title_nfc = normalize(%s, NFC);
 ```
 
+Unbounded derived text uses MD5 expression indexes because PostgreSQL B-tree index entries cannot
+store arbitrarily long values. Exact-value queries must include both the hash and the original-value
+comparison so hash collisions cannot produce false matches:
+
+```sql
+SELECT source_path, display_text
+FROM disclosure.semantic_cell
+WHERE md5(display_text_nfc) = md5(normalize(%s, NFC))
+  AND display_text_nfc = normalize(%s, NFC);
+```
+
 ## Safety and idempotency
 
 - Migrations and structured upserts are idempotent.
