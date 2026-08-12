@@ -1,0 +1,40 @@
+id: change
+kind: derived_operation
+status: reviewed_for_case
+
+meaning: >-
+  A comparison derived from two directly supported values of the same concept whose company,
+  reporting scope, unit, and period basis are comparable.
+
+inputs:
+  current_value: A directly supported value for the requested period.
+  previous_value: A directly supported value for the comparison period.
+
+preconditions:
+  - Both input values are available.
+  - Both values refer to the same company and concept.
+  - Reporting scope and unit are equal.
+  - Reporting periods satisfy the task comparison rule.
+
+outputs:
+  amount:
+    formula: current_value - previous_value
+    unit: same_as_input
+  rate:
+    formula: (current_value - previous_value) / previous_value * 100
+    unit: percent
+    undefined_when: previous_value == 0
+    calculation_rule: Calculate from unrounded input values and round only the displayed result.
+  direction:
+    rules:
+      - when: amount > 0
+        value: increase
+      - when: amount < 0
+        value: decrease
+      - when: amount == 0
+        value: unchanged
+
+provenance:
+  rule: >-
+    Derived outputs cite their input claim IDs and formula. They do not pretend to have a direct XML
+    source of their own.
