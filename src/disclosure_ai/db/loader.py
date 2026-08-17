@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
+import threading
 import time
 import unicodedata
+import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -25,6 +28,15 @@ from disclosure_ai.db.structured import (
 )
 
 DEFAULT_DATABASE_URL = "postgresql://disclosure_ai:local-dev-only@localhost:5432/disclosure_ai"
+_VACUUM_TABLES = frozenset(
+    {
+        "disclosure.semantic_section",
+        "disclosure.semantic_field",
+        "disclosure.semantic_block",
+        "disclosure.semantic_table_row",
+        "disclosure.semantic_cell",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +51,14 @@ class LoadSummary:
     rows: int = 0
     cells: int = 0
     elapsed_seconds: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationStep:
+    label: str
+    statement: str
+    vacuum_table: str | None = None
+    vacuum_every: int = 1
 
 
 def apply_migrations(connection: Connection[Any]) -> None:
@@ -65,8 +85,19 @@ def apply_migrations(connection: Connection[Any]) -> None:
             if applied is None:
                 raise RuntimeError("migration state query returned no row")
             if applied[0]:
+                print(f"migration={version} status=skipped", flush=True)
                 continue
-            cursor.execute(path.read_text(encoding="utf-8"))
+        connection.commit()
+        steps = _migration_steps(path.read_text(encoding="utf-8"))
+        for step_number, step in enumerate(steps, start=1):
+            progress = f"migration={version} step={step_number}/{len(steps)} phase={step.label}"
+            if step.vacuum_table is None:
+                with connection.cursor() as cursor:
+                    _execute_with_heartbeat(cursor, step.statement, progress)
+                connection.commit()
+            else:
+                _execute_batched_migration_step(connection, step, progress)
+        with connection.cursor() as cursor:
             cursor.execute(
                 """
                 INSERT INTO disclosure.schema_migration (version)
@@ -75,13 +106,142 @@ def apply_migrations(connection: Connection[Any]) -> None:
                 """,
                 (version,),
             )
+        connection.commit()
     connection.commit()
+
+
+def _migration_steps(migration: str) -> list[MigrationStep]:
+    progress_marker = "-- progress: "
+    batch_marker = "-- progress-batch: "
+    steps: list[MigrationStep] = []
+    current = MigrationStep(label="apply", statement="")
+    lines: list[str] = []
+
+    for line in migration.splitlines(keepends=True):
+        if line.startswith(progress_marker) or line.startswith(batch_marker):
+            statement = "".join(lines).strip()
+            if statement:
+                steps.append(
+                    MigrationStep(
+                        label=current.label,
+                        statement=statement,
+                        vacuum_table=current.vacuum_table,
+                        vacuum_every=current.vacuum_every,
+                    )
+                )
+            if line.startswith(batch_marker):
+                payload = line.removeprefix(batch_marker).strip().split("|")
+                if len(payload) != 3:
+                    raise ValueError(f"invalid batched migration marker: {line.strip()}")
+                label, vacuum_table, vacuum_every = payload
+                if vacuum_table not in _VACUUM_TABLES:
+                    raise ValueError(f"unsupported vacuum table: {vacuum_table}")
+                vacuum_every_value = int(vacuum_every)
+                if vacuum_every_value <= 0:
+                    raise ValueError("vacuum frequency must be positive")
+                current = MigrationStep(
+                    label=label,
+                    statement="",
+                    vacuum_table=vacuum_table,
+                    vacuum_every=vacuum_every_value,
+                )
+            else:
+                current = MigrationStep(
+                    label=line.removeprefix(progress_marker).strip(), statement=""
+                )
+            lines = []
+        else:
+            lines.append(line)
+
+    statement = "".join(lines).strip()
+    if statement:
+        steps.append(
+            MigrationStep(
+                label=current.label,
+                statement=statement,
+                vacuum_table=current.vacuum_table,
+                vacuum_every=current.vacuum_every,
+            )
+        )
+    return steps
+
+
+def _execute_batched_migration_step(
+    connection: Connection[Any], step: MigrationStep, progress: str
+) -> None:
+    total_rows = 0
+    batch_number = 0
+    while True:
+        batch_number += 1
+        with connection.cursor() as cursor:
+            _execute_with_heartbeat(cursor, step.statement, f"{progress} batch={batch_number}")
+            affected_rows = cursor.rowcount
+        connection.commit()
+        if affected_rows <= 0:
+            break
+        total_rows += affected_rows
+        print(
+            f"{progress} status=committed batch={batch_number} "
+            f"rows={affected_rows} total_rows={total_rows}",
+            flush=True,
+        )
+        if batch_number % step.vacuum_every == 0:
+            _vacuum_after_batch(connection, step.vacuum_table, progress)
+
+    completed_batches = batch_number - 1
+    if total_rows and completed_batches % step.vacuum_every != 0:
+        _vacuum_after_batch(connection, step.vacuum_table, progress)
+    print(f"{progress} status=completed total_rows={total_rows}", flush=True)
+
+
+def _vacuum_after_batch(connection: Connection[Any], table: str | None, progress: str) -> None:
+    if table is None:
+        return
+    previous_autocommit = connection.autocommit
+    connection.autocommit = True
+    try:
+        with connection.cursor() as cursor:
+            _execute_with_heartbeat(cursor, f"VACUUM {table}", f"{progress} vacuum={table}")
+    finally:
+        connection.autocommit = previous_autocommit
+
+
+def _execute_with_heartbeat(cursor: Any, statement: str, progress: str) -> None:
+    started = time.monotonic()
+    stopped = threading.Event()
+
+    def heartbeat() -> None:
+        while not stopped.wait(10):
+            elapsed = time.monotonic() - started
+            print(f"{progress} status=running elapsed={elapsed:.1f}s", flush=True)
+
+    print(f"{progress} status=started", flush=True)
+    worker = threading.Thread(target=heartbeat, daemon=True)
+    worker.start()
+    try:
+        cursor.execute(statement)
+    except BaseException:
+        elapsed = time.monotonic() - started
+        print(f"{progress} status=failed elapsed={elapsed:.1f}s", flush=True)
+        raise
+    else:
+        elapsed = time.monotonic() - started
+        print(f"{progress} status=completed elapsed={elapsed:.1f}s", flush=True)
+    finally:
+        stopped.set()
+        worker.join()
 
 
 def load_structured(connection: Connection[Any], corpus_root: Path | str) -> LoadSummary:
     started = time.monotonic()
+    print("structured phase=read_sources status=started", flush=True)
     companies = list(read_companies(corpus_root))
     documents = list(read_documents(corpus_root))
+    print(
+        f"structured phase=read_sources status=completed companies={len(companies)} "
+        f"documents={len(documents)}",
+        flush=True,
+    )
     corp_codes = {str(company["corp_code"]) for company in companies}
     unknown = sorted({str(document["corp_code"]) for document in documents} - corp_codes)
     if unknown:
@@ -89,12 +249,16 @@ def load_structured(connection: Connection[Any], corpus_root: Path | str) -> Loa
 
     with connection.transaction():
         with connection.cursor() as cursor:
+            print("structured phase=upsert_companies status=started", flush=True)
             cursor.executemany(_COMPANY_UPSERT, [_company_params(company) for company in companies])
             aliases = [alias for company in companies for alias in name_aliases(company)]
             cursor.executemany(_ALIAS_UPSERT, aliases)
+            print("structured phase=upsert_companies status=completed", flush=True)
+            print("structured phase=upsert_documents status=started", flush=True)
             cursor.executemany(
                 _DOCUMENT_UPSERT, [_document_params(document) for document in documents]
             )
+            print("structured phase=upsert_documents status=completed", flush=True)
 
     return LoadSummary(
         companies=len(companies),
@@ -206,6 +370,10 @@ def _load_ir_artifact(
                     },
                 )
             cursor.execute(
+                _DELETE_ARTIFACT_NODES,
+                {"source_path": source_path},
+            )
+            cursor.execute(
                 "DELETE FROM disclosure.semantic_ir WHERE source_path = %s", (source_path,)
             )
             cursor.execute(
@@ -220,6 +388,10 @@ def _load_ir_artifact(
                     "semantic_field_count": len(ir["semantic_fields"]),
                     "block_count": len(ir["blocks"]),
                 },
+            )
+            cursor.executemany(
+                _NODE_UPSERT,
+                _node_params(source_path, str(metadata["doc_id"]), ir),
             )
             cursor.executemany(
                 _SECTION_INSERT,
@@ -270,6 +442,7 @@ def _section_params(source_path: str, value: dict[str, Any]) -> dict[str, Any]:
     title_nfc, title_nfd = normalize_forms(value.get("title"))
     return {
         "source_path": source_path,
+        "node_id": _node_id(source_path, "section", str(value["id"])),
         "section_id": value["id"],
         "ordinal": value["ordinal"],
         "parent_section_id": value.get("parent_section_id"),
@@ -287,6 +460,7 @@ def _field_params(source_path: str, value: dict[str, Any]) -> dict[str, Any]:
     text_nfc, text_nfd = normalize_forms(value.get("text"))
     return {
         "source_path": source_path,
+        "node_id": _node_id(source_path, "field", str(value["id"])),
         "field_id": value["id"],
         "ordinal": value["ordinal"],
         "section_id": value.get("section_id"),
@@ -307,6 +481,7 @@ def _block_params(source_path: str, value: dict[str, Any]) -> dict[str, Any]:
     text_nfc, text_nfd = normalize_forms(value.get("text"))
     return {
         "source_path": source_path,
+        "node_id": _node_id(source_path, "block", str(value["id"])),
         "block_id": value["id"],
         "ordinal": value["ordinal"],
         "section_id": value.get("section_id"),
@@ -327,6 +502,7 @@ def _block_params(source_path: str, value: dict[str, Any]) -> dict[str, Any]:
 def _row_params(source_path: str, block_id: str, value: dict[str, Any]) -> dict[str, Any]:
     return {
         "source_path": source_path,
+        "node_id": _row_node_id(source_path, block_id, int(value["index"])),
         "block_id": block_id,
         "row_index": value["index"],
         **value["evidence"],
@@ -340,6 +516,7 @@ def _cell_params(
     labels = [str(label) for label in value.get("context_labels", [])]
     return {
         "source_path": source_path,
+        "node_id": _node_id(source_path, "cell", str(value["id"])),
         "block_id": block_id,
         "row_index": row_index,
         "column_index": value["column_index"],
@@ -360,6 +537,95 @@ def _cell_params(
         "attributes": Jsonb(value.get("attributes", [])),
         **value["evidence"],
     }
+
+
+def _node_id(source_path: str, node_type: str, local_id: str) -> uuid.UUID:
+    address = "\x1f".join((source_path, node_type, local_id))
+    digest = hashlib.md5(address.encode("utf-8"), usedforsecurity=False).digest()
+    return uuid.UUID(bytes=digest)
+
+
+def _row_node_id(source_path: str, block_id: str, row_index: int) -> uuid.UUID:
+    return _node_id(source_path, "table_row", f"{block_id}:{row_index}")
+
+
+def _node_params(source_path: str, document_id: str, ir: dict[str, Any]) -> list[dict[str, Any]]:
+    nodes: list[dict[str, Any]] = []
+
+    for section in ir["sections"]:
+        parent_section_id = section.get("parent_section_id")
+        nodes.append(
+            {
+                "node_id": _node_id(source_path, "section", str(section["id"])),
+                "document_id": document_id,
+                "node_type": "section",
+                "parent_node_id": (
+                    _node_id(source_path, "section", str(parent_section_id))
+                    if parent_section_id is not None
+                    else None
+                ),
+                "ordinal": section["ordinal"],
+            }
+        )
+
+    for field in ir["semantic_fields"]:
+        section_id = field.get("section_id")
+        nodes.append(
+            {
+                "node_id": _node_id(source_path, "field", str(field["id"])),
+                "document_id": document_id,
+                "node_type": "field",
+                "parent_node_id": (
+                    _node_id(source_path, "section", str(section_id))
+                    if section_id is not None
+                    else None
+                ),
+                "ordinal": field["ordinal"],
+            }
+        )
+
+    for block in ir["blocks"]:
+        parent_table_id = block.get("parent_table_id")
+        section_id = block.get("section_id")
+        if parent_table_id is not None:
+            parent_node_id = _node_id(source_path, "block", str(parent_table_id))
+        elif section_id is not None:
+            parent_node_id = _node_id(source_path, "section", str(section_id))
+        else:
+            parent_node_id = None
+        nodes.append(
+            {
+                "node_id": _node_id(source_path, "block", str(block["id"])),
+                "document_id": document_id,
+                "node_type": "block",
+                "parent_node_id": parent_node_id,
+                "ordinal": block["ordinal"],
+            }
+        )
+
+        for row in block.get("rows", []):
+            row_node_id = _row_node_id(source_path, str(block["id"]), int(row["index"]))
+            nodes.append(
+                {
+                    "node_id": row_node_id,
+                    "document_id": document_id,
+                    "node_type": "table_row",
+                    "parent_node_id": _node_id(source_path, "block", str(block["id"])),
+                    "ordinal": row["index"],
+                }
+            )
+            nodes.extend(
+                {
+                    "node_id": _node_id(source_path, "cell", str(cell["id"])),
+                    "document_id": document_id,
+                    "node_type": "cell",
+                    "parent_node_id": row_node_id,
+                    "ordinal": cell["column_index"],
+                }
+                for cell in row["cells"]
+            )
+
+    return nodes
 
 
 def main() -> None:
@@ -522,34 +788,60 @@ VALUES
      %(section_count)s, %(semantic_field_count)s, %(block_count)s)
 """
 
+_DELETE_ARTIFACT_NODES = """
+DELETE FROM disclosure.nodes
+WHERE node_id IN (
+    SELECT node_id FROM disclosure.semantic_section WHERE source_path = %(source_path)s
+    UNION ALL
+    SELECT node_id FROM disclosure.semantic_field WHERE source_path = %(source_path)s
+    UNION ALL
+    SELECT node_id FROM disclosure.semantic_block WHERE source_path = %(source_path)s
+    UNION ALL
+    SELECT node_id FROM disclosure.semantic_table_row WHERE source_path = %(source_path)s
+    UNION ALL
+    SELECT node_id FROM disclosure.semantic_cell WHERE source_path = %(source_path)s
+)
+"""
+
+_NODE_UPSERT = """
+INSERT INTO disclosure.nodes (node_id, document_id, node_type, parent_node_id, ordinal)
+VALUES (%(node_id)s, %(document_id)s, %(node_type)s, %(parent_node_id)s, %(ordinal)s)
+ON CONFLICT (node_id) DO UPDATE SET
+    document_id = EXCLUDED.document_id,
+    node_type = EXCLUDED.node_type,
+    parent_node_id = EXCLUDED.parent_node_id,
+    ordinal = EXCLUDED.ordinal
+"""
+
 _SECTION_INSERT = """
 INSERT INTO disclosure.semantic_section
-    (source_path, section_id, ordinal, parent_section_id, level, source_element, title,
+    (source_path, node_id, section_id, ordinal, parent_section_id, level, source_element, title,
      title_nfc, title_nfd, attributes, start_byte, end_byte)
 VALUES
-    (%(source_path)s, %(section_id)s, %(ordinal)s, %(parent_section_id)s, %(level)s,
+    (%(source_path)s, %(node_id)s, %(section_id)s, %(ordinal)s, %(parent_section_id)s, %(level)s,
      %(source_element)s, %(title)s, %(title_nfc)s, %(title_nfd)s, %(attributes)s,
      %(start_byte)s, %(end_byte)s)
 """
 
 _FIELD_INSERT = """
 INSERT INTO disclosure.semantic_field
-    (source_path, field_id, ordinal, section_id, element, key_type, semantic_key,
+    (source_path, node_id, field_id, ordinal, section_id, element, key_type, semantic_key,
      display_text, display_text_nfc, display_text_nfd, machine_value, value_type, attributes,
      start_byte, end_byte)
 VALUES
-    (%(source_path)s, %(field_id)s, %(ordinal)s, %(section_id)s, %(element)s, %(key_type)s,
+    (%(source_path)s, %(node_id)s, %(field_id)s, %(ordinal)s, %(section_id)s, %(element)s,
+     %(key_type)s,
      %(semantic_key)s, %(display_text)s, %(display_text_nfc)s, %(display_text_nfd)s,
      %(machine_value)s, %(value_type)s, %(attributes)s, %(start_byte)s, %(end_byte)s)
 """
 
 _BLOCK_INSERT = """
 INSERT INTO disclosure.semantic_block
-    (source_path, block_id, ordinal, section_id, kind, parent_table_id, text_value,
+    (source_path, node_id, block_id, ordinal, section_id, kind, parent_table_id, text_value,
      text_value_nfc, text_value_nfd, classification, message, table_class, table_group_class,
      attributes, start_byte, end_byte)
 VALUES
-    (%(source_path)s, %(block_id)s, %(ordinal)s, %(section_id)s, %(kind)s,
+    (%(source_path)s, %(node_id)s, %(block_id)s, %(ordinal)s, %(section_id)s, %(kind)s,
      %(parent_table_id)s, %(text_value)s, %(text_value_nfc)s, %(text_value_nfd)s,
      %(classification)s, %(message)s, %(table_class)s, %(table_group_class)s,
      %(attributes)s, %(start_byte)s, %(end_byte)s)
@@ -557,19 +849,19 @@ VALUES
 
 _ROW_INSERT = """
 INSERT INTO disclosure.semantic_table_row
-    (source_path, block_id, row_index, start_byte, end_byte)
+    (source_path, node_id, block_id, row_index, start_byte, end_byte)
 VALUES
-    (%(source_path)s, %(block_id)s, %(row_index)s, %(start_byte)s, %(end_byte)s)
+    (%(source_path)s, %(node_id)s, %(block_id)s, %(row_index)s, %(start_byte)s, %(end_byte)s)
 """
 
 _CELL_INSERT = """
 INSERT INTO disclosure.semantic_cell
-    (source_path, block_id, row_index, column_index, cell_id, rowspan, colspan, element,
+    (source_path, node_id, block_id, row_index, column_index, cell_id, rowspan, colspan, element,
      role, semantic_key, machine_value, value_type, display_text, display_text_nfc,
      display_text_nfd, context_labels, context_labels_nfc, context_labels_nfd, attributes,
      start_byte, end_byte)
 VALUES
-    (%(source_path)s, %(block_id)s, %(row_index)s, %(column_index)s, %(cell_id)s,
+    (%(source_path)s, %(node_id)s, %(block_id)s, %(row_index)s, %(column_index)s, %(cell_id)s,
      %(rowspan)s, %(colspan)s, %(element)s, %(role)s, %(semantic_key)s, %(machine_value)s,
      %(value_type)s, %(display_text)s, %(display_text_nfc)s, %(display_text_nfd)s,
      %(context_labels)s, %(context_labels_nfc)s, %(context_labels_nfd)s, %(attributes)s,

@@ -19,9 +19,7 @@ from disclosure_ai.db.loader import apply_migrations, load_derived, load_structu
 
 CORPUS = Path(__file__).resolve().parents[2] / "corpus"
 ADMIN_URL_ENV = "DISCLOSURE_TEST_POSTGRES_URL"
-AUDIT_SOURCE_PATH = (
-    "raw/major/고려아연/20240320001544/20240320001544.xml"
-)
+AUDIT_SOURCE_PATH = "raw/major/고려아연/20240320001544/20240320001544.xml"
 
 
 def _database_url(base_url: str, database: str) -> str:
@@ -73,7 +71,7 @@ def test_real_postgres_structured_load_is_exact_and_idempotent(
         cursor.execute("SELECT count(*) FROM disclosure.name_alias")
         assert cursor.fetchone() == (140,)
         cursor.execute("SELECT count(*) FROM disclosure.schema_migration")
-        assert cursor.fetchone() == (2,)
+        assert cursor.fetchone() == (3,)
         cursor.execute(
             "SELECT count(*) FROM disclosure.disclosure_document "
             "WHERE corp_name_nfc <> normalize(corp_name, NFC) "
@@ -170,3 +168,81 @@ def test_real_postgres_loads_verified_ir_and_joins_nfc_nfd(
                 (source_path,),
             )
             assert cursor.fetchone() == (expected,)
+
+        expected_nodes = (
+            first.sections + first.semantic_fields + first.blocks + first.rows + first.cells
+        )
+        cursor.execute(
+            "SELECT count(*) FROM disclosure.nodes WHERE document_id = %s",
+            (str(ir["document_metadata"]["doc_id"]),),
+        )
+        assert cursor.fetchone() == (expected_nodes,)
+        cursor.execute(
+            "SELECT count(*) FROM disclosure.nodes AS child "
+            "LEFT JOIN disclosure.nodes AS parent ON parent.node_id = child.parent_node_id "
+            "WHERE child.parent_node_id IS NOT NULL AND parent.node_id IS NULL"
+        )
+        assert cursor.fetchone() == (0,)
+        cursor.execute(
+            "SELECT count(*) FROM disclosure.nodes AS child "
+            "JOIN disclosure.nodes AS parent ON parent.node_id = child.parent_node_id "
+            "WHERE child.document_id <> parent.document_id"
+        )
+        assert cursor.fetchone() == (0,)
+        cursor.execute(
+            "SELECT count(*) FROM ("
+            "SELECT node_id, source_path, 'section' AS expected_type "
+            "FROM disclosure.semantic_section "
+            "UNION ALL SELECT node_id, source_path, 'field' FROM disclosure.semantic_field "
+            "UNION ALL SELECT node_id, source_path, 'block' FROM disclosure.semantic_block "
+            "UNION ALL SELECT node_id, source_path, 'table_row' "
+            "FROM disclosure.semantic_table_row "
+            "UNION ALL SELECT node_id, source_path, 'cell' FROM disclosure.semantic_cell"
+            ") AS semantic "
+            "JOIN disclosure.nodes AS node USING (node_id) "
+            "JOIN disclosure.source_artifact AS artifact USING (source_path) "
+            "WHERE node.node_type <> semantic.expected_type "
+            "OR node.document_id <> artifact.doc_id"
+        )
+        assert cursor.fetchone() == (0,)
+
+        cursor.execute(
+            "SELECT child.node_id, parent.node_id "
+            "FROM disclosure.nodes AS child "
+            "JOIN disclosure.nodes AS parent ON parent.node_id = child.parent_node_id "
+            "WHERE child.document_id = %s LIMIT 1",
+            (str(ir["document_metadata"]["doc_id"]),),
+        )
+        hierarchy_pair = cursor.fetchone()
+        assert hierarchy_pair is not None
+        child_node_id, parent_node_id = hierarchy_pair
+        cursor.execute("SAVEPOINT reject_cycle")
+        cursor.execute(
+            "UPDATE disclosure.nodes SET parent_node_id = %s WHERE node_id = %s",
+            (child_node_id, parent_node_id),
+        )
+        with pytest.raises(psycopg.errors.RaiseException, match="hierarchy cycle"):
+            cursor.execute("SET CONSTRAINTS disclosure.nodes_hierarchy_invariants IMMEDIATE")
+        cursor.execute("ROLLBACK TO SAVEPOINT reject_cycle")
+
+        cursor.execute(
+            "SELECT node_id FROM disclosure.semantic_section WHERE source_path = %s LIMIT 1",
+            (source_path,),
+        )
+        section_node = cursor.fetchone()
+        cursor.execute(
+            "SELECT node_id FROM disclosure.semantic_block WHERE source_path = %s LIMIT 1",
+            (source_path,),
+        )
+        block_node = cursor.fetchone()
+        assert section_node is not None and block_node is not None
+        cursor.execute("SAVEPOINT reject_wrong_type")
+        cursor.execute(
+            "UPDATE disclosure.semantic_section SET node_id = %s WHERE node_id = %s",
+            (block_node[0], section_node[0]),
+        )
+        with pytest.raises(psycopg.errors.RaiseException, match="expected node type section"):
+            cursor.execute(
+                "SET CONSTRAINTS disclosure.semantic_section_node_metadata IMMEDIATE"
+            )
+        cursor.execute("ROLLBACK TO SAVEPOINT reject_wrong_type")

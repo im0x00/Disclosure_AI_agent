@@ -15,11 +15,14 @@ from disclosure_ai.db.derived_reader import (
     iter_verified_entries,
     read_verified_ir,
 )
-from disclosure_ai.db.loader import load_structured
+from disclosure_ai.db.loader import _migration_steps, _node_id, _node_params, load_structured
 from disclosure_ai.db.structured import read_companies, read_documents
 
 CORPUS = Path(__file__).resolve().parents[2] / "corpus"
 MIGRATION = Path(__file__).resolve().parents[2] / "src/disclosure_ai/db/migrations/0001_initial.sql"
+NODE_MIGRATION = (
+    Path(__file__).resolve().parents[2] / "src/disclosure_ai/db/migrations/0003_semantic_nodes.sql"
+)
 
 
 def test_existing_structured_sources_have_normalized_join_keys() -> None:
@@ -68,6 +71,118 @@ def test_migration_defines_unicode_and_queryable_ir_tables() -> None:
     assert "semantic_field (semantic_key, md5(machine_value))" in sql
     assert "semantic_block (text_value_nfc)" not in sql
     assert "context_labels_nfc_gin" not in sql
+
+
+def test_node_migration_defines_address_layer_and_semantic_foreign_keys() -> None:
+    sql = NODE_MIGRATION.read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS disclosure.nodes" in sql
+    assert "node_id uuid PRIMARY KEY" in sql
+    for column in ("node_id", "document_id", "node_type", "parent_node_id", "ordinal"):
+        assert column in sql
+    for table in (
+        "semantic_section",
+        "semantic_field",
+        "semantic_block",
+        "semantic_table_row",
+        "semantic_cell",
+    ):
+        assert f"ALTER TABLE disclosure.{table}" in sql
+        assert f"{table}_node_fk" in sql
+    assert "title text" not in sql
+    assert "display_text text" not in sql
+    assert "text_value text" not in sql
+
+    steps = _migration_steps(sql)
+    assert [step.label for step in steps] == [
+        "create_nodes_table",
+        "add_nullable_semantic_node_ids",
+        "index_pending_sections",
+        "backfill_section_nodes",
+        "drop_pending_section_index",
+        "link_section_parents",
+        "index_pending_fields",
+        "backfill_field_nodes",
+        "drop_pending_field_index",
+        "index_pending_blocks",
+        "backfill_block_nodes",
+        "drop_pending_block_index",
+        "link_nested_block_parents",
+        "index_pending_rows",
+        "backfill_row_nodes",
+        "drop_pending_row_index",
+        "index_pending_cells",
+        "backfill_cell_nodes",
+        "drop_pending_cell_index",
+        "create_node_lookup_indexes",
+        "enforce_section_node_link",
+        "enforce_field_node_link",
+        "enforce_block_node_link",
+        "enforce_row_node_link",
+        "enforce_cell_node_link",
+        "validate_semantic_node_metadata",
+        "enforce_node_hierarchy_invariants",
+        "enforce_semantic_node_metadata",
+    ]
+    batched = [step for step in steps if step.vacuum_table is not None]
+    assert len(batched) == 5
+    assert all(
+        "WHERE" in step.statement and "node_id IS NULL" in step.statement for step in batched
+    )
+    assert all("ORDER BY" in step.statement for step in batched)
+    assert all("LIMIT 250000" in step.statement for step in batched)
+    assert sql.count("node_pending_idx") == 10
+    assert "nodes_no_self_parent" in sql
+    assert "validate_node_hierarchy" in sql
+    assert "node hierarchy cycle detected" in sql
+    assert "validate_semantic_node_link" in sql
+    assert "semantic node type or document mismatch detected" in sql
+    assert "ON disclosure.nodes (parent_node_id, ordinal, node_type, node_id)" in sql
+
+
+def test_node_params_builds_semantic_hierarchy_without_content() -> None:
+    ir: dict[str, Any] = {
+        "sections": [
+            {"id": "section-0", "ordinal": 0, "parent_section_id": None},
+            {"id": "section-1", "ordinal": 1, "parent_section_id": "section-0"},
+        ],
+        "semantic_fields": [
+            {"id": "field-0", "ordinal": 0, "section_id": "section-1", "text": "ignored"}
+        ],
+        "blocks": [
+            {
+                "id": "block-table-0",
+                "ordinal": 0,
+                "section_id": "section-1",
+                "kind": "table",
+                "rows": [
+                    {
+                        "index": 0,
+                        "cells": [
+                            {"id": "block-table-0-r0-c0", "column_index": 0, "text": "ignored"}
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+    nodes = _node_params("raw/report.xml", "document-1", ir)
+    by_id = {node["node_id"]: node for node in nodes}
+
+    assert len(nodes) == 6
+    section_1 = _node_id("raw/report.xml", "section", "section-1")
+    field_0 = _node_id("raw/report.xml", "field", "field-0")
+    row_0 = _node_id("raw/report.xml", "table_row", "block-table-0:0")
+    cell_0 = _node_id("raw/report.xml", "cell", "block-table-0-r0-c0")
+
+    assert by_id[section_1]["parent_node_id"] == _node_id("raw/report.xml", "section", "section-0")
+    assert by_id[field_0]["parent_node_id"] == section_1
+    assert by_id[row_0]["parent_node_id"] == _node_id("raw/report.xml", "block", "block-table-0")
+    assert by_id[cell_0]["parent_node_id"] == row_0
+    assert all(len(str(node_id)) == 36 for node_id in by_id)
+    assert str(section_1) == "05c16cfd-0ee9-bfb8-eb3f-36594e12f722"
+    assert all("text" not in node for node in nodes)
 
 
 def test_derived_reader_refuses_in_progress_tree(tmp_path: Path) -> None:

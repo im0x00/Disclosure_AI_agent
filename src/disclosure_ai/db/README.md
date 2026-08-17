@@ -16,8 +16,15 @@ is documentation. `semantics/*.yaml` is intentionally outside this loader.
 `derived` loads the completed Semantic Structural IR into:
 
 - `source_artifact` and `semantic_ir`;
+- `nodes`, the content-free document address and hierarchy layer;
 - `semantic_section` and `semantic_field`;
 - `semantic_block`, `semantic_table_row`, and `semantic_cell`.
+
+Every `semantic_*` row has a unique `node_id` foreign key. `nodes.parent_node_id` links sections,
+fields, blocks, table rows, and cells without copying their semantic content.
+Deferred integrity triggers reject cross-document parents, hierarchy cycles, and semantic rows whose
+linked node has the wrong type or document. Sibling lookup is ordered by `(ordinal, node_type,
+node_id)` because ordinals originate in separate semantic collections.
 
 ## Unicode join contract
 
@@ -61,6 +68,10 @@ WHERE md5(display_text_nfc) = md5(normalize(%s, NFC))
 ## Safety and idempotency
 
 - Migrations and structured upserts are idempotent.
+- Long migrations print their current phase and a 10-second elapsed-time heartbeat.
+- Large semantic backfills use compact UUID addresses, commit in bounded batches, and vacuum between
+  groups of batches so PostgreSQL can reuse dead-row space. An interrupted backfill resumes from rows
+  whose `node_id` is still null.
 - Derived artifacts load one transaction at a time.
 - A rerun skips rows whose derived SHA-256 is already current.
 - The loader verifies `_SUCCESS.json`, every derived file's size/SHA-256, its source SHA-256 link,
