@@ -14,7 +14,8 @@ build/
 *.egg-info/
 
 # IDE and OS
-.idea/
+.idea/*
+!.idea/DisclosureAiAgent.iml
 .vscode/
 .DS_Store
 

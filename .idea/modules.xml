@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/disclosure-ai-agent.iml" filepath="$PROJECT_DIR$/.idea/disclosure-ai-agent.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/DisclosureAiAgent.iml" filepath="$PROJECT_DIR$/.idea/DisclosureAiAgent.iml" />
     </modules>
   </component>
 </project>
