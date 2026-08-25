@@ -2,17 +2,17 @@ import asyncio
 from unittest.mock import Mock
 from uuid import UUID
 
-from disclosure_ai.reasoning.query_understanding.models import (
+from reasoning.query_understanding.models import (
     ContextPoint,
     ContextStatus,
     QueryUnderstanding,
 )
-from disclosure_ai.reasoning.retrieval.models import (
+from reasoning.retrieval import RetrievalService
+from reasoning.retrieval.models import (
     EvidenceTarget,
     RetrievalFrame,
     RetrievedEvidence,
 )
-from disclosure_ai.reasoning.retrieval.services import RetrievalService
 
 
 def test_plan_preserves_query_understanding() -> None:

@@ -1,0 +1,73 @@
+{
+  "passed": false,
+  "manifest_documents": 4204,
+  "filesystem_documents": 4204,
+  "source_artifacts": 4610,
+  "expected_tree_artifacts": 4607,
+  "compiled_tree_artifacts": 4607,
+  "validated_nodes": 66279689,
+  "validated_texts": 35931043,
+  "elapsed_seconds": 5400.484,
+  "failures": [
+    {
+      "doc_id": "periodic_20260316001292",
+      "file_path": "raw/periodic/하나금융지주/20260316001292_annual_2025_12",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/periodic/하나금융지주/20260316001292_annual_2025_12'"
+    },
+    {
+      "doc_id": "periodic_20260515002550",
+      "file_path": "raw/periodic/하나금융지주/20260515002550_quarter_2026_03",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/periodic/하나금융지주/20260515002550_quarter_2026_03'"
+    },
+    {
+      "doc_id": "major_20230203000150",
+      "file_path": "raw/major/하나금융지주/20230203000150",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/major/하나금융지주/20230203000150'"
+    },
+    {
+      "doc_id": "major_20230209000456",
+      "file_path": "raw/major/하나금융지주/20230209000456",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/major/하나금융지주/20230209000456'"
+    },
+    {
+      "doc_id": "major_20230209000504",
+      "file_path": "raw/major/하나금융지주/20230209000504",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/major/하나금융지주/20230209000504'"
+    },
+    {
+      "doc_id": "major_20230427000501",
+      "file_path": "raw/major/하나금융지주/20230427000501",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/major/하나금융지주/20230427000501'"
+    },
+    {
+      "doc_id": "major_20230726000277",
+      "file_path": "raw/major/하나금융지주/20230726000277",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/major/하나금융지주/20230726000277'"
+    },
+    {
+      "doc_id": "major_20230801000091",
+      "file_path": "raw/major/하나금융지주/20230801000091",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/major/하나금융지주/20230801000091'"
+    },
+    {
+      "doc_id": "major_20230817000200",
+      "file_path": "raw/major/하나금융지주/20230817000200",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/major/하나금융지주/20230817000200'"
+    },
+    {
+      "doc_id": "major_20231124000309",
+      "file_path": "raw/major/하나금융지주/20231124000309",
+      "error_type": "InterruptedError",
+      "message": "[Errno 4] Interrupted system call: '/Users/macforhsj/Desktop/project/DisclosureAiAgent/corpus/raw/major/하나금융지주/20231124000309'"
+    }
+  ]
+}

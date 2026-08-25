@@ -1,0 +1,46 @@
+-- Psycopg named placeholders show the exact mapping from manifest.jsonl to SQL columns.
+INSERT INTO corpus.disclosure_document (
+    doc_id,
+    corp_code,
+    doc_group,
+    doc_subtype,
+    report_name,
+    is_correction,
+    receipt_no,
+    receipt_date,
+    filer_name,
+    base_year,
+    base_month,
+    file_path,
+    file_format,
+    file_count
+) VALUES (
+    %(doc_id)s,
+    %(corp_code)s,
+    %(doc_group)s,
+    %(doc_subtype)s,
+    %(report_name)s,
+    %(is_correction)s,
+    %(receipt_no)s,
+    %(receipt_date)s,
+    %(filer_name)s,
+    %(base_year)s,
+    %(base_month)s,
+    %(file_path)s,
+    %(file_format)s,
+    %(file_count)s
+)
+ON CONFLICT (doc_id) DO UPDATE SET
+    corp_code = EXCLUDED.corp_code,
+    doc_group = EXCLUDED.doc_group,
+    doc_subtype = EXCLUDED.doc_subtype,
+    report_name = EXCLUDED.report_name,
+    is_correction = EXCLUDED.is_correction,
+    receipt_no = EXCLUDED.receipt_no,
+    receipt_date = EXCLUDED.receipt_date,
+    filer_name = EXCLUDED.filer_name,
+    base_year = EXCLUDED.base_year,
+    base_month = EXCLUDED.base_month,
+    file_path = EXCLUDED.file_path,
+    file_format = EXCLUDED.file_format,
+    file_count = EXCLUDED.file_count;

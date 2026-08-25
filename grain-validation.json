@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "manifest_documents": 4204,
+  "filesystem_documents": 4204,
+  "checked_documents": 4204,
+  "compiled_grains": 1562211,
+  "validated_core_ranges": 8243975,
+  "validated_context_ranges": 13275387,
+  "max_estimated_tokens": 1800,
+  "average_estimated_tokens": 330.507,
+  "estimated_token_p50": 178,
+  "estimated_token_p90": 848,
+  "estimated_token_p99": 1789,
+  "tiny_grains_under_64": 235466,
+  "tiny_grain_ratio": 0.150726,
+  "token_bucket_counts": {
+    "1-31": 61010,
+    "32-63": 174456,
+    "64-127": 288366,
+    "128-255": 514158,
+    "256-511": 269676,
+    "512-1023": 123753,
+    "1024+": 130792
+  },
+  "grain_kind_counts": {
+    "document": 0,
+    "prose": 353603,
+    "table": 1204881,
+    "image": 3727
+  },
+  "elapsed_seconds": 1295.935,
+  "failures": []
+}

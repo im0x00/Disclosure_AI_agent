@@ -1,0 +1,42 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	query_understanding(query_understanding)
+	clarification(clarification)
+	retrieval_plan(retrieval_plan)
+	retrieval_search(retrieval_search)
+	operand_binding(operand_binding)
+	computation_planning(computation_planning)
+	computation_execution(computation_execution)
+	core_verification(core_verification)
+	final_answer(final_answer)
+	cannot_answer(cannot_answer)
+	answer_verification(answer_verification)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> query_understanding;
+	cannot_answer --> answer_verification;
+	clarification --> answer_verification;
+	computation_execution --> core_verification;
+	computation_planning -. &nbsp;execute&nbsp; .-> computation_execution;
+	computation_planning -. &nbsp;verify&nbsp; .-> core_verification;
+	core_verification -.-> cannot_answer;
+	core_verification -. &nbsp;retry_computation&nbsp; .-> computation_planning;
+	core_verification -. &nbsp;pass&nbsp; .-> final_answer;
+	core_verification -. &nbsp;retry_understanding&nbsp; .-> query_understanding;
+	core_verification -. &nbsp;retry_retrieval&nbsp; .-> retrieval_plan;
+	final_answer --> answer_verification;
+	operand_binding -. &nbsp;plan_computation&nbsp; .-> computation_planning;
+	operand_binding -. &nbsp;verify&nbsp; .-> core_verification;
+	query_understanding -.-> clarification;
+	query_understanding -. &nbsp;retrieval&nbsp; .-> retrieval_plan;
+	retrieval_plan --> retrieval_search;
+	retrieval_search -. &nbsp;verify&nbsp; .-> core_verification;
+	retrieval_search -. &nbsp;bind_operands&nbsp; .-> operand_binding;
+	answer_verification --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

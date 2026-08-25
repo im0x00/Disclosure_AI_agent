@@ -1,0 +1,226 @@
+[
+  {
+    "case_id": "seed_001",
+    "bucket": "lookup",
+    "question": "삼성전자가 2025년 7월 28일 공시하고 7월 31일 정정한 반도체 위탁생산 공급계약의 계약금액은 얼마인가?",
+    "logical_query": {"operation": "lookup", "entities": ["삼성전자"], "metric": "supply_contract_amount", "period": "2025-07-28", "scope": "contract", "version": "latest_as_of_2025-07-31"},
+    "answerability": "answerable",
+    "expected_response": "22,764,764,160,000원",
+    "facts": [{"name": "contract_amount", "value": "22764764160000", "unit": "KRW", "period": "2025-07-28", "scope": "contract", "version": "corrected_2025-07-31", "evidence_ids": ["contract_amount"]}],
+    "required_document_ids": ["exchange_20250731800028"],
+    "evidence": [
+      {"evidence_id": "contract_amount", "doc_id": "exchange_20250731800028", "source_path": "raw/exchange/삼성전자/20250731800028/20250731800028.xml", "source_sha256": "7c8abf434e2a8f01fd7d20b7db9a82b0ff5dbb6a4ae720b5a9fd6551a7064fbb", "start_byte": 6589, "end_byte": 6971, "must_contain": ["계약금액(원)", "22,764,764,160,000"], "note": "Latest corrected filing states the contract amount."}
+    ],
+    "claims": {"required": ["계약금액 22,764,764,160,000원"], "optional": ["USD 16,544,160,000 환산액"], "forbidden": ["7.6을 계약금액으로 제시"]},
+    "grading": "numeric"
+  },
+  {
+    "case_id": "seed_002",
+    "bucket": "lookup",
+    "question": "삼성전자의 2025년 7월 28일 반도체 위탁생산 공급계약에서 최신 정정 기준 계약상대는 누구인가?",
+    "logical_query": {"operation": "lookup", "entities": ["삼성전자"], "metric": "contract_counterparty", "period": "2025-07-28", "scope": "contract", "version": "latest_as_of_2025-07-31"},
+    "answerability": "answerable",
+    "expected_response": "테슬라(Tesla, Inc.)",
+    "facts": [{"name": "counterparty", "value": "테슬라(Tesla, Inc.)", "period": "2025-07-28", "scope": "contract", "version": "corrected_2025-07-31", "evidence_ids": ["latest_counterparty"]}],
+    "required_document_ids": ["exchange_20250731800028"],
+    "evidence": [
+      {"evidence_id": "latest_counterparty", "doc_id": "exchange_20250731800028", "source_path": "raw/exchange/삼성전자/20250731800028/20250731800028.xml", "source_sha256": "7c8abf434e2a8f01fd7d20b7db9a82b0ff5dbb6a4ae720b5a9fd6551a7064fbb", "start_byte": 7791, "end_byte": 8043, "must_contain": ["3. 계약상대", "테슬라(Tesla, Inc.)"], "note": "Current value in the corrected disclosure."}
+    ],
+    "claims": {"required": ["테슬라(Tesla, Inc.)"], "forbidden": ["글로벌 대형기업을 최신 계약상대로 제시"]},
+    "grading": "exact"
+  },
+  {
+    "case_id": "seed_003",
+    "bucket": "lookup",
+    "question": "SK하이닉스가 2024년 4월 24일 공시한 청주 M15X 건설 투자금액은 얼마인가?",
+    "logical_query": {"operation": "lookup", "entities": ["SK하이닉스"], "metric": "facility_investment_amount", "period": "2024-04-24", "scope": "청주 M15X 건설", "version": "filed"},
+    "answerability": "answerable",
+    "expected_response": "5,296,200,000,000원",
+    "facts": [{"name": "investment_amount", "value": "5296200000000", "unit": "KRW", "period": "2024-04-24", "scope": "청주 M15X 건설", "version": "filed", "evidence_ids": ["m15x_amount"]}],
+    "required_document_ids": ["exchange_20240424800596"],
+    "evidence": [
+      {"evidence_id": "m15x_amount", "doc_id": "exchange_20240424800596", "source_path": "raw/exchange/SK하이닉스/20240424800596/20240424800596.xml", "source_sha256": "d3871b7aca9267ff17058750327e38c241daf28d610dd9655c7024c10f7c8ded", "start_byte": 2642, "end_byte": 3035, "must_contain": ["투자금액(원)", "5,296,200,000,000"], "note": "Facility investment amount row."}
+    ],
+    "claims": {"required": ["5,296,200,000,000원"]},
+    "grading": "numeric"
+  },
+  {
+    "case_id": "seed_004",
+    "bucket": "lookup",
+    "question": "한미반도체 7공장 신규시설투자의 공시상 종료 예정일은 언제인가?",
+    "logical_query": {"operation": "date_lookup", "entities": ["한미반도체"], "metric": "facility_investment_end_date", "period": "2025-06-20", "scope": "한미반도체 7공장", "version": "filed"},
+    "answerability": "answerable",
+    "expected_response": "2026년 11월 30일",
+    "facts": [{"name": "investment_end_date", "value": "2026-11-30", "period": "2025-06-20", "scope": "한미반도체 7공장", "version": "filed", "evidence_ids": ["investment_end_date"]}],
+    "required_document_ids": ["exchange_20250620800077"],
+    "evidence": [
+      {"evidence_id": "investment_end_date", "doc_id": "exchange_20250620800077", "source_path": "raw/exchange/한미반도체/20250620800077/20250620800077.xml", "source_sha256": "e2ac5d6792f5a4bb71b92b7a6f316344b34cfdf0c60c3a9dc9e16053ff88b4b6", "start_byte": 4674, "end_byte": 4926, "must_contain": ["종료일", "2026-11-30"], "note": "The filing marks this as the investment end date."}
+    ],
+    "claims": {"required": ["2026-11-30"], "optional": ["예정일이며 변동 가능"]},
+    "grading": "exact"
+  },
+  {
+    "case_id": "seed_005",
+    "bucket": "calculation",
+    "question": "SK하이닉스가 2024년에 공시한 청주 M15X 건설과 용인 신규 Fab 건설 중 투자금액이 더 큰 것은 무엇인가?",
+    "logical_query": {"operation": "comparison", "entities": ["SK하이닉스"], "metric": "facility_investment_amount", "period": "2024", "scope": "청주 M15X 건설 vs 용인 신규 Fab 건설", "version": "filed"},
+    "answerability": "answerable",
+    "expected_response": "용인 반도체 클러스터 내 신규 Fab 건설이 더 크다.",
+    "facts": [
+      {"name": "m15x_amount", "value": "5296200000000", "unit": "KRW", "evidence_ids": ["m15x_target", "m15x_amount"]},
+      {"name": "yongin_amount", "value": "9411500000000", "unit": "KRW", "evidence_ids": ["yongin_target", "yongin_amount"]},
+      {"name": "larger_project", "value": "용인 반도체 클러스터 내 신규 Fab 건설", "evidence_ids": ["m15x_amount", "yongin_amount"]}
+    ],
+    "required_document_ids": ["exchange_20240424800596", "exchange_20240726800615"],
+    "evidence": [
+      {"evidence_id": "m15x_target", "doc_id": "exchange_20240424800596", "source_path": "raw/exchange/SK하이닉스/20240424800596/20240424800596.xml", "source_sha256": "d3871b7aca9267ff17058750327e38c241daf28d610dd9655c7024c10f7c8ded", "start_byte": 2374, "end_byte": 2633, "must_contain": ["투자대상", "청주 M15X 건설"], "note": "Identifies the first project."},
+      {"evidence_id": "m15x_amount", "doc_id": "exchange_20240424800596", "source_path": "raw/exchange/SK하이닉스/20240424800596/20240424800596.xml", "source_sha256": "d3871b7aca9267ff17058750327e38c241daf28d610dd9655c7024c10f7c8ded", "start_byte": 2642, "end_byte": 3035, "must_contain": ["투자금액(원)", "5,296,200,000,000"], "note": "First comparison operand."},
+      {"evidence_id": "yongin_target", "doc_id": "exchange_20240726800615", "source_path": "raw/exchange/SK하이닉스/20240726800615/20240726800615.xml", "source_sha256": "f5483d636f46041c6aed5a17c757a8c4bd4c1ffd18973fad5a2e1f529e725fdd", "start_byte": 2380, "end_byte": 2672, "must_contain": ["투자대상", "용인 반도체 클러스터 내 신규 Fab 건설"], "note": "Identifies the second project."},
+      {"evidence_id": "yongin_amount", "doc_id": "exchange_20240726800615", "source_path": "raw/exchange/SK하이닉스/20240726800615/20240726800615.xml", "source_sha256": "f5483d636f46041c6aed5a17c757a8c4bd4c1ffd18973fad5a2e1f529e725fdd", "start_byte": 2681, "end_byte": 3074, "must_contain": ["투자금액(원)", "9,411,500,000,000"], "note": "Second comparison operand."}
+    ],
+    "claims": {"required": ["용인 신규 Fab", "두 투자금액"], "forbidden": ["청주 M15X가 더 크다고 답변"]},
+    "grading": "checklist"
+  },
+  {
+    "case_id": "seed_006",
+    "bucket": "calculation",
+    "question": "SK하이닉스의 용인 신규 Fab 투자금액은 청주 M15X 투자금액보다 얼마 더 큰가?",
+    "logical_query": {"operation": "difference", "entities": ["SK하이닉스"], "metric": "facility_investment_amount", "period": "2024", "scope": "용인 신규 Fab minus 청주 M15X", "version": "filed"},
+    "answerability": "answerable",
+    "expected_response": "4,115,300,000,000원 더 크다.",
+    "facts": [
+      {"name": "m15x_amount", "value": "5296200000000", "unit": "KRW", "evidence_ids": ["m15x_amount"]},
+      {"name": "yongin_amount", "value": "9411500000000", "unit": "KRW", "evidence_ids": ["yongin_amount"]},
+      {"name": "difference", "value": "4115300000000", "unit": "KRW", "version": "derived", "evidence_ids": ["m15x_amount", "yongin_amount"]}
+    ],
+    "required_document_ids": ["exchange_20240424800596", "exchange_20240726800615"],
+    "evidence": [
+      {"evidence_id": "m15x_amount", "doc_id": "exchange_20240424800596", "source_path": "raw/exchange/SK하이닉스/20240424800596/20240424800596.xml", "source_sha256": "d3871b7aca9267ff17058750327e38c241daf28d610dd9655c7024c10f7c8ded", "start_byte": 2642, "end_byte": 3035, "must_contain": ["투자금액(원)", "5,296,200,000,000"], "note": "Subtrahend."},
+      {"evidence_id": "yongin_amount", "doc_id": "exchange_20240726800615", "source_path": "raw/exchange/SK하이닉스/20240726800615/20240726800615.xml", "source_sha256": "f5483d636f46041c6aed5a17c757a8c4bd4c1ffd18973fad5a2e1f529e725fdd", "start_byte": 2681, "end_byte": 3074, "must_contain": ["투자금액(원)", "9,411,500,000,000"], "note": "Minuend."}
+    ],
+    "claims": {"required": ["4,115,300,000,000원"], "optional": ["두 operand"]},
+    "grading": "numeric"
+  },
+  {
+    "case_id": "seed_007",
+    "bucket": "calculation",
+    "question": "SK하이닉스가 2024년에 공시한 청주 M15X와 용인 신규 Fab의 투자금액 합계는 얼마인가?",
+    "logical_query": {"operation": "sum", "entities": ["SK하이닉스"], "metric": "facility_investment_amount", "period": "2024", "scope": "청주 M15X plus 용인 신규 Fab", "version": "filed"},
+    "answerability": "answerable",
+    "expected_response": "14,707,700,000,000원",
+    "facts": [
+      {"name": "m15x_amount", "value": "5296200000000", "unit": "KRW", "evidence_ids": ["m15x_amount"]},
+      {"name": "yongin_amount", "value": "9411500000000", "unit": "KRW", "evidence_ids": ["yongin_amount"]},
+      {"name": "sum", "value": "14707700000000", "unit": "KRW", "version": "derived", "evidence_ids": ["m15x_amount", "yongin_amount"]}
+    ],
+    "required_document_ids": ["exchange_20240424800596", "exchange_20240726800615"],
+    "evidence": [
+      {"evidence_id": "m15x_amount", "doc_id": "exchange_20240424800596", "source_path": "raw/exchange/SK하이닉스/20240424800596/20240424800596.xml", "source_sha256": "d3871b7aca9267ff17058750327e38c241daf28d610dd9655c7024c10f7c8ded", "start_byte": 2642, "end_byte": 3035, "must_contain": ["투자금액(원)", "5,296,200,000,000"], "note": "First addend."},
+      {"evidence_id": "yongin_amount", "doc_id": "exchange_20240726800615", "source_path": "raw/exchange/SK하이닉스/20240726800615/20240726800615.xml", "source_sha256": "f5483d636f46041c6aed5a17c757a8c4bd4c1ffd18973fad5a2e1f529e725fdd", "start_byte": 2681, "end_byte": 3074, "must_contain": ["투자금액(원)", "9,411,500,000,000"], "note": "Second addend."}
+    ],
+    "claims": {"required": ["14,707,700,000,000원"], "optional": ["두 operand"]},
+    "grading": "numeric"
+  },
+  {
+    "case_id": "seed_008",
+    "bucket": "relation",
+    "question": "삼성전자의 2025년 7월 반도체 위탁생산 공급계약에서 최초 공시와 7월 31일 정정 후 계약상대가 어떻게 바뀌었는가?",
+    "logical_query": {"operation": "correction_aware_lookup", "entities": ["삼성전자"], "metric": "contract_counterparty", "period": "2025-07", "scope": "contract_version_history", "version": "original_to_latest"},
+    "answerability": "answerable",
+    "expected_response": "최초 공시의 '글로벌 대형기업'이 정정 후 '테슬라(Tesla, Inc.)'로 공개되었다.",
+    "facts": [
+      {"name": "original_counterparty", "value": "글로벌 대형기업", "version": "original", "evidence_ids": ["original_counterparty"]},
+      {"name": "corrected_counterparty", "value": "테슬라(Tesla, Inc.)", "version": "corrected", "evidence_ids": ["correction_change"]}
+    ],
+    "required_document_ids": ["exchange_20250728800035", "exchange_20250731800028"],
+    "evidence": [
+      {"evidence_id": "original_counterparty", "doc_id": "exchange_20250728800035", "source_path": "raw/exchange/삼성전자/20250728800035/20250728800035.xml", "source_sha256": "5d27a70e97179f15323fe4efe57ae49a99415d64bdce99348a4bd39b0e465d73", "start_byte": 3830, "end_byte": 4082, "must_contain": ["3. 계약상대", "글로벌 대형기업"], "note": "Original filing value."},
+      {"evidence_id": "correction_change", "doc_id": "exchange_20250731800028", "source_path": "raw/exchange/삼성전자/20250731800028/20250731800028.xml", "source_sha256": "7c8abf434e2a8f01fd7d20b7db9a82b0ff5dbb6a4ae720b5a9fd6551a7064fbb", "start_byte": 3972, "end_byte": 4370, "must_contain": ["글로벌 대형기업", "테슬라(Tesla, Inc.)"], "note": "Correction table explicitly records before and after."}
+    ],
+    "claims": {"required": ["정정 전 글로벌 대형기업", "정정 후 테슬라"], "optional": ["영업비밀 공개 동의"], "forbidden": ["최초부터 테슬라로 공개되었다고 답변"]},
+    "grading": "checklist"
+  },
+  {
+    "case_id": "seed_009",
+    "bucket": "relation",
+    "question": "LG에너지솔루션이 2024년 10월 Ford와 맺은 전기차 배터리 공급계약은 이후 해지되었는가? 해지일과 공시상 주요 사유를 함께 답해줘.",
+    "logical_query": {"operation": "contract_lifecycle", "entities": ["LG에너지솔루션", "Ford Motor Company"], "metric": "contract_status", "period": "2024-10-15_to_2025-12-17", "scope": "전기차 배터리 공급계약", "version": "latest"},
+    "answerability": "answerable",
+    "expected_response": "해지되었다. 해지일은 2025년 12월 17일이며, 주요 사유는 거래 상대방의 계약 해지 통보다.",
+    "facts": [
+      {"name": "counterparty", "value": "Ford Motor Company", "evidence_ids": ["original_counterparty"]},
+      {"name": "contract_status", "value": "terminated", "version": "latest", "evidence_ids": ["terminated_contract", "related_original"]},
+      {"name": "termination_date", "value": "2025-12-17", "evidence_ids": ["termination_date"]},
+      {"name": "termination_reason", "value": "거래 상대방의 계약 해지 통보", "evidence_ids": ["termination_reason"]}
+    ],
+    "required_document_ids": ["exchange_20241015800258", "exchange_20251217800800"],
+    "evidence": [
+      {"evidence_id": "original_counterparty", "doc_id": "exchange_20241015800258", "source_path": "raw/exchange/LG에너지솔루션/20241015800258/20241015800258.xml", "source_sha256": "6230ec0c8f66cbfd7f40295b867b9814f3f0ae4c637d29cf4adb36005dde3169", "start_byte": 3962, "end_byte": 4222, "must_contain": ["계약상대", "Ford Motor Company"], "note": "Original contract counterparty."},
+      {"evidence_id": "terminated_contract", "doc_id": "exchange_20251217800800", "source_path": "raw/exchange/LG에너지솔루션/20251217800800/20251217800800.xml", "source_sha256": "ba25cbac1669dec36cc9148fb86290a541f3ebc6508f1bf564f9cf0c993f23ab", "start_byte": 2456, "end_byte": 2732, "must_contain": ["해지계약명", "전기차 배터리 공급계약"], "note": "Identifies the terminated contract."},
+      {"evidence_id": "termination_reason", "doc_id": "exchange_20251217800800", "source_path": "raw/exchange/LG에너지솔루션/20251217800800/20251217800800.xml", "source_sha256": "ba25cbac1669dec36cc9148fb86290a541f3ebc6508f1bf564f9cf0c993f23ab", "start_byte": 5148, "end_byte": 5437, "must_contain": ["해지 주요사유", "거래 상대방의 계약 해지 통보"], "note": "Termination reason row."},
+      {"evidence_id": "termination_date", "doc_id": "exchange_20251217800800", "source_path": "raw/exchange/LG에너지솔루션/20251217800800/20251217800800.xml", "source_sha256": "ba25cbac1669dec36cc9148fb86290a541f3ebc6508f1bf564f9cf0c993f23ab", "start_byte": 5446, "end_byte": 5698, "must_contain": ["해지일자", "2025-12-17"], "note": "Termination date row."},
+      {"evidence_id": "related_original", "doc_id": "exchange_20251217800800", "source_path": "raw/exchange/LG에너지솔루션/20251217800800/20251217800800.xml", "source_sha256": "ba25cbac1669dec36cc9148fb86290a541f3ebc6508f1bf564f9cf0c993f23ab", "start_byte": 6339, "end_byte": 7813, "must_contain": ["2024년 10월 15일 공시", "Ford Motor Company간의 전기차 배터리 공급 계약"], "note": "Termination filing names the original event."}
+    ],
+    "claims": {"required": ["해지됨", "2025-12-17", "거래 상대방의 계약 해지 통보"], "optional": ["일부 EV 모델 생산 중단"], "forbidden": ["계약이 현재 유효하다고 답변"]},
+    "grading": "checklist"
+  },
+  {
+    "case_id": "seed_010",
+    "bucket": "unanswerable",
+    "question": "삼성전자의 2025년 7월 반도체 위탁생산 공급계약의 판매ㆍ공급지역은 어느 나라인가?",
+    "logical_query": {"operation": "lookup", "entities": ["삼성전자"], "metric": "supply_region_country", "period": "2025-07", "scope": "contract", "version": "latest_as_of_2025-07-31"},
+    "answerability": "unanswerable",
+    "expected_response": "공시에서 판매ㆍ공급지역을 확인할 수 없다.",
+    "facts": [],
+    "required_document_ids": ["exchange_20250731800028"],
+    "evidence": [
+      {"evidence_id": "undisclosed_region", "doc_id": "exchange_20250731800028", "source_path": "raw/exchange/삼성전자/20250731800028/20250731800028.xml", "source_sha256": "7c8abf434e2a8f01fd7d20b7db9a82b0ff5dbb6a4ae720b5a9fd6551a7064fbb", "start_byte": 8298, "end_byte": 8538, "must_contain": ["4. 판매ㆍ공급지역", ">-</span>"], "note": "The latest filing leaves the region blank with '-'."}
+    ],
+    "claims": {"required": ["공시에서 확인할 수 없음"], "forbidden": ["테슬라 소재지를 계약 지역으로 추론", "미국이라고 답변"]},
+    "grading": "checklist"
+  },
+  {
+    "case_id": "seed_011",
+    "bucket": "unanswerable",
+    "question": "LG에너지솔루션이 2024년 10월 15일 Ford와 맺은 전기차 배터리 공급계약의 최초 공시 당시 확정 계약금액은 얼마인가?",
+    "logical_query": {"operation": "lookup", "entities": ["LG에너지솔루션", "Ford Motor Company"], "metric": "original_confirmed_contract_amount", "period": "2024-10-15", "scope": "전기차 배터리 공급계약", "version": "original"},
+    "answerability": "unanswerable",
+    "expected_response": "최초 공시 당시 계약금액은 확정되지 않았으며 공시에서 확인할 수 없다.",
+    "facts": [],
+    "required_document_ids": ["exchange_20241015800258"],
+    "evidence": [
+      {"evidence_id": "original_amount_blank", "doc_id": "exchange_20241015800258", "source_path": "raw/exchange/LG에너지솔루션/20241015800258/20241015800258.xml", "source_sha256": "6230ec0c8f66cbfd7f40295b867b9814f3f0ae4c637d29cf4adb36005dde3169", "start_byte": 2732, "end_byte": 3109, "must_contain": ["계약금액(원)", ">-</span>"], "note": "Original filing does not state a contract amount."}
+    ],
+    "claims": {"required": ["최초 공시 당시 확정되지 않음"], "forbidden": ["2025년 해지금액 9,603,075,000,000원을 최초 확정 계약금액으로 대입"]},
+    "grading": "checklist"
+  },
+  {
+    "case_id": "seed_012",
+    "bucket": "open",
+    "question": "LG에너지솔루션의 Ford 전기차 배터리 공급계약과 이후 해지를 핵심 수치와 날짜를 포함해 정리해줘.",
+    "logical_query": {"operation": "cross_document_synthesis", "entities": ["LG에너지솔루션", "Ford Motor Company"], "metric": "contract_lifecycle_summary", "period": "2024-10-15_to_2025-12-17", "scope": "전기차 배터리 공급계약", "version": "latest"},
+    "answerability": "answerable",
+    "expected_response": "2024년 10월 15일 Ford와 유럽 지역의 전기차 배터리 공급계약을 공시했고, 2025년 12월 17일 거래 상대방의 계약 해지 통보로 해지했다. 해지금액은 9,603,075,000,000원이다.",
+    "facts": [
+      {"name": "counterparty", "value": "Ford Motor Company", "evidence_ids": ["original_counterparty"]},
+      {"name": "supply_region", "value": "유럽", "evidence_ids": ["original_region"]},
+      {"name": "termination_amount", "value": "9603075000000", "unit": "KRW", "evidence_ids": ["termination_amount"]},
+      {"name": "termination_reason", "value": "거래 상대방의 계약 해지 통보", "evidence_ids": ["termination_reason"]},
+      {"name": "termination_date", "value": "2025-12-17", "evidence_ids": ["termination_date"]}
+    ],
+    "required_document_ids": ["exchange_20241015800258", "exchange_20251217800800"],
+    "evidence": [
+      {"evidence_id": "original_counterparty", "doc_id": "exchange_20241015800258", "source_path": "raw/exchange/LG에너지솔루션/20241015800258/20241015800258.xml", "source_sha256": "6230ec0c8f66cbfd7f40295b867b9814f3f0ae4c637d29cf4adb36005dde3169", "start_byte": 3962, "end_byte": 4222, "must_contain": ["계약상대", "Ford Motor Company"], "note": "Original counterparty."},
+      {"evidence_id": "original_region", "doc_id": "exchange_20241015800258", "source_path": "raw/exchange/LG에너지솔루션/20241015800258/20241015800258.xml", "source_sha256": "6230ec0c8f66cbfd7f40295b867b9814f3f0ae4c637d29cf4adb36005dde3169", "start_byte": 4489, "end_byte": 4746, "must_contain": ["판매ㆍ공급지역", "유럽"], "note": "Original supply region."},
+      {"evidence_id": "termination_amount", "doc_id": "exchange_20251217800800", "source_path": "raw/exchange/LG에너지솔루션/20251217800800/20251217800800.xml", "source_sha256": "ba25cbac1669dec36cc9148fb86290a541f3ebc6508f1bf564f9cf0c993f23ab", "start_byte": 2741, "end_byte": 3134, "must_contain": ["해지금액(원)", "9,603,075,000,000"], "note": "Termination amount, not the original confirmed contract amount."},
+      {"evidence_id": "termination_reason", "doc_id": "exchange_20251217800800", "source_path": "raw/exchange/LG에너지솔루션/20251217800800/20251217800800.xml", "source_sha256": "ba25cbac1669dec36cc9148fb86290a541f3ebc6508f1bf564f9cf0c993f23ab", "start_byte": 5148, "end_byte": 5437, "must_contain": ["해지 주요사유", "거래 상대방의 계약 해지 통보"], "note": "Termination reason."},
+      {"evidence_id": "termination_date", "doc_id": "exchange_20251217800800", "source_path": "raw/exchange/LG에너지솔루션/20251217800800/20251217800800.xml", "source_sha256": "ba25cbac1669dec36cc9148fb86290a541f3ebc6508f1bf564f9cf0c993f23ab", "start_byte": 5446, "end_byte": 5698, "must_contain": ["해지일자", "2025-12-17"], "note": "Termination date."}
+    ],
+    "claims": {
+      "required": ["Ford Motor Company", "2024-10-15 최초 공시", "유럽", "2025-12-17 해지", "해지금액 9,603,075,000,000원", "거래 상대방의 계약 해지 통보"],
+      "optional": ["일부 EV 모델 생산 중단", "원 계약금액은 최초 공시 당시 미확정"],
+      "forbidden": ["해지금액을 최초 확정 계약금액이라고 표현", "계약이 현재 유효하다고 표현"]
+    },
+    "grading": "checklist"
+  }
+]
