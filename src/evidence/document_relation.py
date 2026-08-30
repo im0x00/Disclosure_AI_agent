@@ -3,10 +3,14 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from types import MappingProxyType
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from evidence.document_tree import DocumentTree, NodeKind, SourceRange, walk_nodes
+from evidence.document_grain import DocumentGrain
+from evidence.document_tree import DocumentTree, walk_nodes
+
+GrainId = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
 
 class RelationPredicate(StrEnum):
@@ -37,23 +41,27 @@ class UnsupportedRelationSignals(ValueError):
 
 
 class DocumentRelation(BaseModel):
-    """One directed, in-corpus relation with optional subtree endpoints.
+    """One directed, in-corpus relation with optional grain endpoints.
 
-    A missing anchor means that the endpoint is the whole document.
+    An empty grain-id tuple means that the endpoint is the whole document.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     source_doc_id: str = Field(pattern=r"^[a-z][a-z0-9-]*_[0-9]{14}$")
+    source_grain_ids: tuple[GrainId, ...] = ()
     predicate: RelationPredicate
     target_doc_id: str = Field(pattern=r"^[a-z][a-z0-9-]*_[0-9]{14}$")
-    source_anchor: SourceRange | None = None
-    target_anchor: SourceRange | None = None
+    target_grain_ids: tuple[GrainId, ...] = ()
 
     @model_validator(mode="after")
-    def reject_self_relation(self) -> DocumentRelation:
+    def validate_endpoints(self) -> DocumentRelation:
         if self.source_doc_id == self.target_doc_id:
             raise ValueError("a document relation must connect two different documents")
+        if len(self.source_grain_ids) != len(set(self.source_grain_ids)):
+            raise ValueError("source_grain_ids must not contain duplicates")
+        if len(self.target_grain_ids) != len(set(self.target_grain_ids)):
+            raise ValueError("target_grain_ids must not contain duplicates")
         return self
 
 
@@ -92,43 +100,47 @@ def tree_relation_signals(tree: DocumentTree) -> frozenset[str]:
         for node in walk_nodes(artifact.root):
             if node.source_tag.lower() == "correction":
                 signals.add(RelationSignal.IS_CORRECTION)
-            if node.kind != NodeKind.LINK:
-                continue
-            href = next(
-                (
-                    attribute.value
-                    for attribute in node.attributes
-                    if attribute.name.lower() == "href"
-                ),
-                "",
-            ).lower()
-            if "rcpno=" in href or "acptno=" in href:
+            attribute_values = " ".join(attribute.value.lower() for attribute in node.attributes)
+            if "rcpno=" in attribute_values or "acptno=" in attribute_values:
                 signals.add(RelationSignal.RELATED_DISCLOSURE)
     return frozenset(signals)
 
 
-def validate_relation_anchors(
+def validate_relation_grains(
     relation: DocumentRelation,
     *,
-    source_tree: DocumentTree,
-    target_tree: DocumentTree,
+    grains_by_id: Mapping[str, DocumentGrain],
 ) -> None:
-    """Check document identities and optional anchors against immutable trees."""
+    """Check optional grain endpoints against the current compiled grain set."""
 
-    if source_tree.doc_id != relation.source_doc_id:
-        raise ValueError("source tree does not match source_doc_id")
-    if target_tree.doc_id != relation.target_doc_id:
-        raise ValueError("target tree does not match target_doc_id")
-
-    checks = (
-        ("source", relation.source_anchor, source_tree),
-        ("target", relation.target_anchor, target_tree),
+    endpoints = (
+        ("source", relation.source_doc_id, relation.source_grain_ids),
+        ("target", relation.target_doc_id, relation.target_grain_ids),
     )
-    for endpoint, anchor, tree in checks:
-        if anchor is None:
-            continue
-        node_ranges = {
-            node.source for artifact in tree.artifacts for node in walk_nodes(artifact.root)
-        }
-        if anchor not in node_ranges:
-            raise ValueError(f"{endpoint}_anchor is not a node in its document tree")
+    for endpoint, doc_id, grain_ids in endpoints:
+        grains: list[DocumentGrain] = []
+        for grain_id in grain_ids:
+            grain = grains_by_id.get(grain_id)
+            if grain is None:
+                raise ValueError(f"{endpoint}_grain_ids contains an unknown grain_id")
+            if grain.doc_id != doc_id:
+                raise ValueError(f"{endpoint}_grain_ids contains a grain owned by another document")
+            grains.append(grain)
+
+        ordinals = [grain.source.ordinal for grain in grains]
+        if ordinals != sorted(ordinals):
+            raise ValueError(f"{endpoint}_grain_ids must follow document order")
+
+
+def relations_affected_by_grain_rebuild(
+    relations: Iterable[DocumentRelation],
+    rebuilt_doc_ids: Iterable[str],
+) -> tuple[DocumentRelation, ...]:
+    """Return edges that must be rebuilt after selected documents are recompiled."""
+
+    rebuilt = frozenset(rebuilt_doc_ids)
+    return tuple(
+        relation
+        for relation in relations
+        if relation.source_doc_id in rebuilt or relation.target_doc_id in rebuilt
+    )

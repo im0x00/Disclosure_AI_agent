@@ -1,24 +1,24 @@
 import asyncio
 from typing import cast
 from unittest.mock import Mock
-from uuid import UUID
 
 from langchain_core.language_models import BaseChatModel
 
-from reasoning.core_models import (
+from reasoning.core.core_models import (
     CoreVerificationResult,
     RetryPolicy,
     VerificationAction,
     VerificationIssue,
 )
-from reasoning.core_verification import CoreVerificationService
+from reasoning.core.core_verification import CoreVerificationService
 from reasoning.query_understanding.models import (
     ContextOrigin,
     ContextPoint,
     ContextStatus,
     QueryUnderstanding,
 )
-from reasoning.retrieval.models import EvidenceTarget, RetrievalSearchResult, RetrievedEvidence
+from reasoning.retrieval.models import EvidenceTarget, RetrievalSearchResult
+from tests.reasoning.retrieval_fixtures import retrieved_evidence
 
 
 def test_semantic_verifier_retries_a_concrete_misunderstanding_then_stops_at_budget() -> None:
@@ -58,14 +58,10 @@ async def _verify(
         value="consolidated",
         origin=ContextOrigin.INFERRED,
     )
-    evidence = RetrievedEvidence(
+    evidence = retrieved_evidence(
         document_id="doc",
-        node_id=UUID("00000000-0000-0000-0000-000000000001"),
-        node_type="cell",
+        grain_id="1" * 64,
         text="Separate-basis amount",
-        source_path="raw/doc.xml",
-        start_byte=0,
-        end_byte=21,
     )
     return await service.verify(
         question="What is the amount?",

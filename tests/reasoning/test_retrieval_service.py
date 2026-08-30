@@ -1,6 +1,5 @@
 import asyncio
 from unittest.mock import Mock
-from uuid import UUID
 
 from reasoning.query_understanding.models import (
     ContextPoint,
@@ -8,11 +7,16 @@ from reasoning.query_understanding.models import (
     QueryUnderstanding,
 )
 from reasoning.retrieval import RetrievalService
+from reasoning.retrieval.batch_service import RetrievalBatchService
 from reasoning.retrieval.models import (
     EvidenceTarget,
     RetrievalFrame,
     RetrievedEvidence,
+    SearchBatchResult,
+    SearchRequest,
 )
+from reasoning.retrieval.retrieval import RetrievalQueryCompiler, RetrievalQueryConfig
+from tests.reasoning.retrieval_fixtures import retrieved_evidence
 
 
 def test_plan_preserves_query_understanding() -> None:
@@ -24,7 +28,7 @@ def test_plan_preserves_query_understanding() -> None:
     planner = _Planner({"evidence_targets": [target.model_dump()]})
     llm = Mock()
     llm.with_structured_output.return_value = planner
-    service = RetrievalService(llm=llm, search_backend=_SearchBackend())
+    service = _service(llm, _SearchBackend())
 
     frame = asyncio.run(service.plan(understanding))
 
@@ -48,7 +52,7 @@ def test_search_returns_one_result_per_target() -> None:
     llm = Mock()
     llm.with_structured_output.return_value = planner
     backend = _SearchBackend()
-    service = RetrievalService(llm=llm, search_backend=backend)
+    service = _service(llm, backend)
 
     results = asyncio.run(
         service.search(
@@ -60,9 +64,9 @@ def test_search_returns_one_result_per_target() -> None:
     )
 
     assert [result.target for result in results] == targets
-    assert [result.search_results for result in results] == [
-        [backend.evidence],
-        [backend.evidence],
+    assert [[item.grain_id for item in result.search_results] for result in results] == [
+        ["1" * 64],
+        ["1" * 64],
     ]
 
 
@@ -76,18 +80,43 @@ class _Planner:
 
 class _SearchBackend:
     def __init__(self) -> None:
-        self.evidence = RetrievedEvidence(
+        self.evidence: RetrievedEvidence = retrieved_evidence(
+            target_id="target:0",
             document_id="major_20240101000001",
-            node_id=UUID("00000000-0000-0000-0000-000000000001"),
-            node_type="block",
+            grain_id="1" * 64,
             text="Contract terminated.",
-            source_path="raw/major/example/20240101000001/document.xml",
-            start_byte=10,
-            end_byte=30,
         )
 
-    async def search(self, _: EvidenceTarget) -> list[RetrievedEvidence]:
-        return [self.evidence]
+    async def search_many(
+        self,
+        requests: tuple[SearchRequest, ...],
+    ) -> tuple[SearchBatchResult, ...]:
+        return tuple(
+            SearchBatchResult(
+                request=request,
+                hits=(self.evidence.model_copy(update={"target_id": request.target_id}),),
+            )
+            for request in requests
+        )
+
+
+def _service(llm: Mock, backend: _SearchBackend) -> RetrievalService:
+    compiler = RetrievalQueryCompiler(
+        RetrievalQueryConfig(
+            lexical_candidate_k=10,
+            vector_candidate_k=10,
+            max_top_k=5,
+            minimum_score=0.5,
+            exhaustive_grain_limit=20,
+        )
+    )
+    return RetrievalService(
+        llm=llm,
+        batch_service=RetrievalBatchService(
+            query_compiler=compiler,
+            search_backend=backend,
+        ),
+    )
 
 
 def _understanding() -> QueryUnderstanding:

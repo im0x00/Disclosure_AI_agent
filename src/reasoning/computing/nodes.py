@@ -3,7 +3,7 @@ from typing import NotRequired
 
 from typing_extensions import TypedDict
 
-from reasoning.core_models import ComputationIntent, CoreVerificationResult
+from reasoning.core.core_models import ComputationIntent, CoreVerificationResult
 from reasoning.retrieval.models import RetrievalSearchResult
 
 from .models import (

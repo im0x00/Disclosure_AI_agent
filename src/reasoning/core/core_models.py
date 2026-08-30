@@ -1,13 +1,21 @@
+import re
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class OperandRequirement(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    operand_id: str = Field(min_length=1, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+    operand_id: str = Field(min_length=1)
     description: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid_operand_id(self) -> Self:
+        if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", self.operand_id) is None:
+            raise ValueError("operand_id must be an ASCII identifier")
+        return self
 
 
 class ComputationIntent(BaseModel):
@@ -46,3 +54,11 @@ class RetryPolicy(BaseModel):
     max_understanding_attempts: int = Field(default=2, ge=1)
     max_retrieval_attempts: int = Field(default=3, ge=1)
     max_computation_attempts: int = Field(default=2, ge=1)
+
+
+class RuntimeFailure(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    node: str = Field(min_length=1)
+    attempts: int = Field(ge=1)
+    error_type: str = Field(min_length=1)

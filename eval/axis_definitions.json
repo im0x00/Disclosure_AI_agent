@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0",
+  "required_case_axes": [
+    "task_family",
+    "response_mode",
+    "capability",
+    "semantic_domain",
+    "company_cardinality",
+    "period_cardinality",
+    "document_cardinality",
+    "document_type",
+    "scope",
+    "version_policy",
+    "answerability"
+  ],
+  "axes": {
+    "task_family": {
+      "kind": "categorical",
+      "extensible": true,
+      "values": [
+        "search_and_extraction",
+        "multiple_retrieval_comparison_calculation",
+        "complex_document_reasoning"
+      ]
+    },
+    "response_mode": {
+      "kind": "categorical",
+      "extensible": false,
+      "values": ["closed", "open"]
+    },
+    "capability": {
+      "kind": "categorical",
+      "extensible": true,
+      "values": [
+        "fact_lookup",
+        "date_lookup",
+        "single_document_summary",
+        "count",
+        "sum",
+        "difference",
+        "ratio",
+        "percentage_change",
+        "comparison",
+        "ranking",
+        "event_aggregation",
+        "fundraising_aggregation",
+        "correction_aware_lookup",
+        "termination_check",
+        "exists",
+        "history_synthesis",
+        "business_change_synthesis"
+      ]
+    },
+    "semantic_domain": {
+      "kind": "categorical",
+      "extensible": true,
+      "values": [
+        "financial_statement",
+        "facility_investment",
+        "supply_contract",
+        "fundraising",
+        "large_shareholding",
+        "business_description",
+        "acquisition"
+      ]
+    },
+    "company_cardinality": {
+      "kind": "categorical",
+      "extensible": false,
+      "values": ["single", "multiple"]
+    },
+    "period_cardinality": {
+      "kind": "categorical",
+      "extensible": false,
+      "values": ["single", "multiple"]
+    },
+    "document_cardinality": {
+      "kind": "categorical",
+      "extensible": false,
+      "values": ["single", "multiple"]
+    },
+    "document_type": {
+      "kind": "open_categorical",
+      "extensible": true
+    },
+    "scope": {
+      "kind": "open_categorical",
+      "extensible": true
+    },
+    "version_policy": {
+      "kind": "open_categorical",
+      "extensible": true
+    },
+    "answerability": {
+      "kind": "categorical",
+      "extensible": true,
+      "values": ["answerable", "unanswerable", "needs_clarification"]
+    }
+  },
+  "core_capability_matrix": [
+    {
+      "task_family": "search_and_extraction",
+      "response_mode": "closed",
+      "capabilities": ["fact_lookup", "date_lookup"]
+    },
+    {
+      "task_family": "search_and_extraction",
+      "response_mode": "open",
+      "capabilities": ["single_document_summary"]
+    },
+    {
+      "task_family": "multiple_retrieval_comparison_calculation",
+      "response_mode": "closed",
+      "capabilities": ["count", "sum", "difference", "ratio", "percentage_change", "comparison", "ranking"]
+    },
+    {
+      "task_family": "multiple_retrieval_comparison_calculation",
+      "response_mode": "open",
+      "capabilities": ["event_aggregation", "fundraising_aggregation"]
+    },
+    {
+      "task_family": "complex_document_reasoning",
+      "response_mode": "closed",
+      "capabilities": ["correction_aware_lookup", "termination_check", "exists"]
+    },
+    {
+      "task_family": "complex_document_reasoning",
+      "response_mode": "open",
+      "capabilities": ["history_synthesis", "business_change_synthesis"]
+    }
+  ]
+}

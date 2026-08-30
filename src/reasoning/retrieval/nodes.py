@@ -4,7 +4,7 @@ from typing import NotRequired
 
 from typing_extensions import TypedDict
 
-from reasoning.core_models import CoreVerificationResult
+from reasoning.core.core_models import CoreVerificationResult
 from reasoning.query_understanding.models import (
     QueryUnderstanding,
 )

@@ -2,9 +2,11 @@ import asyncio
 from decimal import Decimal
 from typing import Any, cast
 from unittest.mock import Mock
-from uuid import UUID
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 
 from reasoning.computing.models import (
     ComputationPlan,
@@ -21,7 +23,8 @@ from reasoning.computing.services import (
     ComputationService,
     OperandBindingService,
 )
-from reasoning.core_models import (
+from reasoning.core.core_graph import GraphDependencies, RuntimeNodeRetryPolicy, build_graph
+from reasoning.core.core_models import (
     ComputationIntent,
     CoreVerificationResult,
     OperandRequirement,
@@ -29,16 +32,25 @@ from reasoning.core_models import (
     VerificationAction,
     VerificationIssue,
 )
-from reasoning.core_verification import CoreVerificationService
-from reasoning.generate_answer.models import CannotAnswerResponse, FinalResponse
+from reasoning.core.core_verification import CoreVerificationService
+from reasoning.generate_answer.models import (
+    AnswerClaim,
+    AnswerVerificationIssue,
+    CannotAnswerResponse,
+    ClarificationResponse,
+    FinalResponse,
+)
 from reasoning.generate_answer.services import ResponseGenerationService
-from reasoning.graph import GraphDependencies, build_graph
 from reasoning.query_understanding.models import (
     ContextPoint,
     ContextStatus,
+    QuerySafetyResult,
     QueryUnderstanding,
 )
-from reasoning.query_understanding.services import QueryUnderstandingService
+from reasoning.query_understanding.services import (
+    QuerySafetyGuardService,
+    QueryUnderstandingService,
+)
 from reasoning.retrieval.models import (
     EvidenceTarget,
     RetrievalFrame,
@@ -46,6 +58,7 @@ from reasoning.retrieval.models import (
     RetrievedEvidence,
 )
 from reasoning.retrieval.services import RetrievalService
+from tests.reasoning.retrieval_fixtures import retrieved_evidence
 
 
 def test_computation_path_retrieves_binds_computes_verifies_and_answers() -> None:
@@ -64,6 +77,7 @@ def test_computation_path_retrieves_binds_computes_verifies_and_answers() -> Non
     answer = _AnswerFake()
     graph = build_graph(
         GraphDependencies(
+            query_safety=cast(QuerySafetyGuardService, _SafetyFake()),
             query_understanding=cast(
                 QueryUnderstandingService,
                 _UnderstandingFake(understanding),
@@ -99,6 +113,7 @@ def test_missing_evidence_reuses_retrieval_until_budget_then_returns_cannot_answ
     )
     graph = build_graph(
         GraphDependencies(
+            query_safety=cast(QuerySafetyGuardService, _SafetyFake()),
             query_understanding=cast(
                 QueryUnderstandingService,
                 _UnderstandingFake(understanding),
@@ -138,6 +153,7 @@ def test_inferred_context_conflict_retries_understanding_with_feedback() -> None
     )
     graph = build_graph(
         GraphDependencies(
+            query_safety=cast(QuerySafetyGuardService, _SafetyFake()),
             query_understanding=cast(QueryUnderstandingService, understanding_service),
             retrieval=cast(RetrievalService, retrieval),
             operand_binding=cast(OperandBindingService, _UnexpectedService()),
@@ -155,6 +171,121 @@ def test_inferred_context_conflict_retries_understanding_with_feedback() -> None
     assert retrieval.search_calls == 2
 
 
+def test_transient_node_failure_retries_twice_then_returns_cannot_answer() -> None:
+    understanding_service = _TransientFailingUnderstandingFake()
+    graph = build_graph(
+        GraphDependencies(
+            query_safety=cast(QuerySafetyGuardService, _SafetyFake()),
+            query_understanding=cast(QueryUnderstandingService, understanding_service),
+            retrieval=cast(RetrievalService, _UnexpectedService()),
+            operand_binding=cast(OperandBindingService, _UnexpectedService()),
+            computation_planning=cast(ComputationPlanningService, _UnexpectedService()),
+            computation=ComputationService(),
+            core_verification=cast(CoreVerificationService, _UnexpectedService()),
+            answer_generation=cast(ResponseGenerationService, _AnswerFake()),
+        ),
+        runtime_retry_policy=RuntimeNodeRetryPolicy(base_delay_seconds=0),
+    )
+
+    output = asyncio.run(graph.ainvoke({"question": "What happened?"}))
+
+    assert isinstance(output["response"], CannotAnswerResponse)
+    assert understanding_service.calls == 2
+    assert output["response"].reasons == ["query_understanding failed after 2 attempts"]
+
+
+def test_non_transient_node_failure_is_not_retried() -> None:
+    understanding_service = _NonTransientFailingUnderstandingFake()
+    graph = build_graph(
+        GraphDependencies(
+            query_safety=cast(QuerySafetyGuardService, _SafetyFake()),
+            query_understanding=cast(QueryUnderstandingService, understanding_service),
+            retrieval=cast(RetrievalService, _UnexpectedService()),
+            operand_binding=cast(OperandBindingService, _UnexpectedService()),
+            computation_planning=cast(ComputationPlanningService, _UnexpectedService()),
+            computation=ComputationService(),
+            core_verification=cast(CoreVerificationService, _UnexpectedService()),
+            answer_generation=cast(ResponseGenerationService, _AnswerFake()),
+        ),
+        runtime_retry_policy=RuntimeNodeRetryPolicy(base_delay_seconds=0),
+    )
+
+    output = asyncio.run(graph.ainvoke({"question": "What happened?"}))
+
+    assert isinstance(output["response"], CannotAnswerResponse)
+    assert understanding_service.calls == 1
+    assert output["response"].reasons == ["query_understanding failed after 1 attempts"]
+
+
+def test_answer_verification_feedback_repairs_answer_once() -> None:
+    understanding = _understanding(computation_intent=None)
+    retrieval = _RetrievalFake(understanding, with_evidence=True)
+    answer = _RepairingAnswerFake()
+    graph = build_graph(
+        GraphDependencies(
+            query_safety=cast(QuerySafetyGuardService, _SafetyFake()),
+            query_understanding=cast(
+                QueryUnderstandingService,
+                _UnderstandingFake(understanding),
+            ),
+            retrieval=cast(RetrievalService, retrieval),
+            operand_binding=cast(OperandBindingService, _UnexpectedService()),
+            computation_planning=cast(ComputationPlanningService, _UnexpectedService()),
+            computation=ComputationService(),
+            core_verification=cast(
+                CoreVerificationService,
+                _VerificationFake(VerificationAction.PASS),
+            ),
+            answer_generation=cast(ResponseGenerationService, answer),
+        )
+    )
+
+    output = asyncio.run(graph.ainvoke({"question": "What is the amount?"}))
+
+    assert isinstance(output["response"], FinalResponse)
+    assert answer.calls == 2
+    assert answer.feedback_codes == [(), ("unknown_evidence_reference",)]
+
+
+def test_clarification_interrupt_resumes_the_same_run() -> None:
+    clarification_needed = QueryUnderstanding(
+        question_raw="What is the amount?",
+        intention="find amount",
+        contextual_points=[
+            ContextPoint(key="company", status=ContextStatus.MISSING, critical=True)
+        ],
+        needs_clarification=True,
+    )
+    resolved = _understanding(computation_intent=None)
+    understanding_service = _UnderstandingSequenceFake(clarification_needed, resolved)
+    retrieval = _RetrievalFake(resolved, with_evidence=True)
+    graph = build_graph(
+        GraphDependencies(
+            query_safety=cast(QuerySafetyGuardService, _SafetyFake()),
+            query_understanding=cast(QueryUnderstandingService, understanding_service),
+            retrieval=cast(RetrievalService, retrieval),
+            operand_binding=cast(OperandBindingService, _UnexpectedService()),
+            computation_planning=cast(ComputationPlanningService, _UnexpectedService()),
+            computation=ComputationService(),
+            core_verification=cast(
+                CoreVerificationService,
+                _VerificationFake(VerificationAction.PASS),
+            ),
+            answer_generation=cast(ResponseGenerationService, _ClarifyingAnswerFake()),
+        ),
+        checkpointer=InMemorySaver(),
+    )
+    config: RunnableConfig = {"configurable": {"thread_id": "clarification-test"}}
+    resume_command: Command[Any] = Command(resume={"answer": "Example Corp"})
+
+    interrupted = asyncio.run(graph.ainvoke({"question": "What is the amount?"}, config=config))
+    output = asyncio.run(graph.ainvoke(resume_command, config=config))
+
+    assert "__interrupt__" in interrupted
+    assert isinstance(output["response"], FinalResponse)
+    assert understanding_service.clarification_answers_seen == [(), ("Example Corp",)]
+
+
 class _UnderstandingFake:
     def __init__(self, result: QueryUnderstanding) -> None:
         self.result = result
@@ -164,10 +295,53 @@ class _UnderstandingFake:
         self,
         question: str,
         feedback: tuple[VerificationIssue, ...] = (),
+        clarification_answers: tuple[str, ...] = (),
     ) -> QueryUnderstanding:
-        del question
+        del question, clarification_answers
         self.feedback_seen.append(feedback)
         return self.result
+
+
+class _SafetyFake:
+    async def validate_query_safety(self, question: str) -> QuerySafetyResult:
+        del question
+        return QuerySafetyResult(is_safe=True, reason="ordinary disclosure question")
+
+
+class _TransientFailingUnderstandingFake:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def understand(self, **kwargs):  # type: ignore[no-untyped-def]
+        del kwargs
+        self.calls += 1
+        raise TimeoutError("temporary model timeout")
+
+
+class _NonTransientFailingUnderstandingFake:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def understand(self, **kwargs):  # type: ignore[no-untyped-def]
+        del kwargs
+        self.calls += 1
+        raise ValueError("invalid structured output")
+
+
+class _UnderstandingSequenceFake:
+    def __init__(self, *results: QueryUnderstanding) -> None:
+        self.results = list(results)
+        self.clarification_answers_seen: list[tuple[str, ...]] = []
+
+    async def understand(
+        self,
+        question: str,
+        feedback: tuple[VerificationIssue, ...] = (),
+        clarification_answers: tuple[str, ...] = (),
+    ) -> QueryUnderstanding:
+        del question, feedback
+        self.clarification_answers_seen.append(clarification_answers)
+        return self.results.pop(0)
 
 
 class _RetrievalFake:
@@ -177,23 +351,17 @@ class _RetrievalFake:
         self.search_calls = 0
         self.feedback_seen: list[tuple[VerificationIssue, ...]] = []
         self.evidence = (
-            RetrievedEvidence(
+            retrieved_evidence(
                 document_id="doc-left",
-                node_id=UUID("00000000-0000-0000-0000-000000000001"),
-                node_type="cell",
+                grain_id="1" * 64,
                 text="Left amount is 10.",
-                source_path="raw/left.xml",
-                start_byte=0,
-                end_byte=18,
+                target_id="target:left",
             ),
-            RetrievedEvidence(
+            retrieved_evidence(
                 document_id="doc-right",
-                node_id=UUID("00000000-0000-0000-0000-000000000002"),
-                node_type="cell",
+                grain_id="2" * 64,
                 text="Right amount is 2.",
-                source_path="raw/right.xml",
-                start_byte=0,
-                end_byte=18,
+                target_id="target:right",
             ),
         )
 
@@ -233,7 +401,7 @@ class _BindingFake:
                     evidence_refs=(
                         EvidenceReference(
                             document_id=self.evidence[0].document_id,
-                            node_id=self.evidence[0].node_id,
+                            grain_id=self.evidence[0].grain_id,
                         ),
                     ),
                 ),
@@ -243,7 +411,7 @@ class _BindingFake:
                     evidence_refs=(
                         EvidenceReference(
                             document_id=self.evidence[1].document_id,
-                            node_id=self.evidence[1].node_id,
+                            grain_id=self.evidence[1].grain_id,
                         ),
                     ),
                 ),
@@ -304,14 +472,68 @@ class _AnswerFake:
         understanding: QueryUnderstanding,
         retrieval_results: list[RetrievalSearchResult],
         computation_result: Any = None,
+        feedback: tuple[AnswerVerificationIssue, ...] = (),
     ) -> FinalResponse:
-        del understanding
+        del understanding, feedback
         self.answer_calls += 1
         return FinalResponse(
             type="final",
             main_text="answer",
+            claims=(
+                AnswerClaim(
+                    text="answer",
+                    evidence_refs=(
+                        EvidenceReference(
+                            document_id=retrieval_results[0].search_results[0].document_id,
+                            grain_id=retrieval_results[0].search_results[0].grain_id,
+                        ),
+                    ),
+                    uses_computation=computation_result is not None,
+                    computed_value=(
+                        computation_result.value if computation_result is not None else None
+                    ),
+                ),
+            ),
             evidences=retrieval_results,
             computation=computation_result,
+        )
+
+
+class _ClarifyingAnswerFake(_AnswerFake):
+    async def clarify(self, understanding: QueryUnderstanding) -> ClarificationResponse:
+        return ClarificationResponse(
+            type="clarification",
+            main_text="Which company?",
+            missing_context_keys=understanding.contextual_points,
+        )
+
+
+class _RepairingAnswerFake(_AnswerFake):
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+        self.feedback_codes: list[tuple[str, ...]] = []
+
+    async def answer(
+        self,
+        understanding: QueryUnderstanding,
+        retrieval_results: list[RetrievalSearchResult],
+        computation_result: Any = None,
+        feedback: tuple[AnswerVerificationIssue, ...] = (),
+    ) -> FinalResponse:
+        del understanding, computation_result
+        self.calls += 1
+        self.feedback_codes.append(tuple(issue.code for issue in feedback))
+        evidence = retrieval_results[0].search_results[0]
+        reference = EvidenceReference(
+            document_id=evidence.document_id if self.calls > 1 else "unknown",
+            grain_id=evidence.grain_id,
+        )
+        return FinalResponse(
+            type="final",
+            main_text="answer",
+            claims=(AnswerClaim(text="answer", evidence_refs=(reference,)),),
+            evidences=retrieval_results,
         )
 
 

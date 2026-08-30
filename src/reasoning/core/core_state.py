@@ -10,9 +10,9 @@ from reasoning.computing.models import (
     Operand,
     OperandBindingResult,
 )
-from reasoning.core_models import ComputationIntent, CoreVerificationResult
+from reasoning.core.core_models import ComputationIntent, CoreVerificationResult, RuntimeFailure
 from reasoning.generate_answer.models import AnswerVerificationResult, Response
-from reasoning.query_understanding.models import QueryUnderstanding
+from reasoning.query_understanding.models import QuerySafetyResult, QueryUnderstanding
 from reasoning.retrieval.models import RetrievalFrame, RetrievalSearchResult
 
 
@@ -26,6 +26,10 @@ class DisclosureAIOutput(TypedDict):
 
 class DisclosureAIState(TypedDict):
     question: str
+
+    query_safety: NotRequired[QuerySafetyResult]
+
+    clarification_answers: NotRequired[tuple[str, ...]]
 
     query_understanding: NotRequired[QueryUnderstanding]
 
@@ -45,6 +49,8 @@ class DisclosureAIState(TypedDict):
 
     core_verification: NotRequired[CoreVerificationResult]
 
+    runtime_failure: NotRequired[RuntimeFailure]
+
     response: NotRequired[Response]
 
     answer_verification: NotRequired[AnswerVerificationResult]
@@ -54,3 +60,5 @@ class DisclosureAIState(TypedDict):
     retrieval_attempts: NotRequired[int]
 
     computation_attempts: NotRequired[int]
+
+    answer_generation_attempts: NotRequired[int]

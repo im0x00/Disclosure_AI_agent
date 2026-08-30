@@ -2,7 +2,6 @@ import asyncio
 from decimal import Decimal
 from typing import cast
 from unittest.mock import Mock
-from uuid import UUID
 
 from langchain_core.language_models import BaseChatModel
 
@@ -45,7 +44,10 @@ def test_planning_service_returns_structured_ast() -> None:
     )
 
     assert result == planned
-    llm.with_structured_output.assert_called_once_with(ComputationPlanningResult)
+    llm.with_structured_output.assert_called_once_with(
+        ComputationPlanningResult,
+        method="json_schema",
+    )
 
 
 def test_scalar_aggregate_comparison_and_logic_primitives() -> None:
@@ -196,7 +198,7 @@ def test_compiler_and_executor_return_typed_failures() -> None:
 def test_result_preserves_evidence_trace_and_execution_steps() -> None:
     reference = EvidenceReference(
         document_id="periodic_20250000000001",
-        node_id=UUID("00000000-0000-0000-0000-000000000001"),
+        grain_id="1" * 64,
     )
     result = _compute(
         _op(Primitive.ADD, _ref("amount"), _const("5")),

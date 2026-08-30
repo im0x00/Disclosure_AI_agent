@@ -80,18 +80,21 @@ business-event query, use subject time while retaining the filing-time cutoff.
 
 Do not infer correction targets from date alone. Use issuer, form/subtype, period or event
 identity, the correction wrapper's referenced submission date, and related-disclosure
-evidence. Preserve an unresolved external target when the original filing is outside the
-corpus.
+evidence. When the original filing is outside the corpus, keep the case unresolved and do
+not create an external-target edge.
 
 Corpus evidence supports this caution:
 
 - 1,004 filings have `is_correction=true`.
-- 1,001 raw filings expose a parseable referenced submission date with a simple scan.
-- A coarse in-corpus match by issuer, group/subtype, period, and referenced date leaves 341
-  without a target and 84 with multiple candidates.
+- 2 resolve from an explicit in-corpus receipt link.
+- 266 have no in-corpus candidate and remain unresolved.
+- 528 have one candidate and resolve directly.
+- 103 resolve to the latest prior version in a correction series with one root filing.
+- 105 required direct filing comparison: 102 resolve and 3 abstain because none of the
+  candidates is the same contract/project.
 
-These match counts are diagnostic, not production linking rules. They show why the edge
-needs evidence and a resolution status instead of a date-only foreign key.
+These counts cover all 1,004 current correction filings. Similarity only orders manual
+review candidates; it never chooses a target or creates an edge.
 
 ## Implementation boundary
 

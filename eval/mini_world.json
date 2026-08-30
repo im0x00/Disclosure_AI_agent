@@ -1,0 +1,22 @@
+{
+  "schema_version": "0.1",
+  "world_id": "development-mini-v1",
+  "company_codes": [
+    "00126380",
+    "01350869",
+    "01412725",
+    "00266961",
+    "00164645"
+  ],
+  "receipt_date_from": "2024-01-01",
+  "receipt_date_to": "2025-12-31",
+  "document_selection": {
+    "strategy": "suite_required_documents",
+    "suite_path": "mini_world_suite.json"
+  },
+  "relation_closure": {
+    "revises": "both_transitive",
+    "references": "outgoing_one_hop",
+    "terminates": "outgoing_one_hop"
+  }
+}

@@ -112,5 +112,37 @@ commits each document batch so a long interrupted run can be resumed safely. The
 must be loaded first because grain rows reference `corpus.disclosure_document` and
 `corpus.source_artifact`.
 
+## Build and load document relations
+
+Intent: build and inspect one complete edge snapshot before changing the database.
+
+Build from the current database JSONB so the snapshot uses the exact loaded trees and grain IDs:
+
+```shell
+PYTHONPATH=src uv run python -m evidence.relation_builder \
+  --from-database \
+  --database-url "$DATABASE_URL" \
+  --manual-reviews docs/relation-review/correction-comparisons.jsonl \
+  --output-dir outputs/relations
+```
+
+This writes `outputs/relations/relations.jsonl` and
+`outputs/relations/unresolved.jsonl`; it does not connect to PostgreSQL. Inspect those files,
+then atomically replace the database snapshot:
+
+```shell
+PYTHONPATH=src uv run python -m evidence.document_relation_loader \
+  --relations-path outputs/relations/relations.jsonl \
+  --unresolved-path outputs/relations/unresolved.jsonl \
+  --database-url "$DATABASE_URL" \
+  --replace
+```
+
+The catalog and grain loaders must run first. The relation loader validates every non-empty
+grain endpoint against `corpus.document_grain` inside the same transaction. Any missing or
+wrong-document grain rolls back the full replacement. The loader rejects
+`ambiguous_candidates`; `no_in_corpus_candidate` and manually checked `reviewed_no_match`
+remain audit-only and are never inserted as edges.
+
 
 ## Boundaries

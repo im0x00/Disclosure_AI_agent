@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from evidence.compiler import compile_document_tree
+from evidence.document_grain import DocumentGrain
 from evidence.document_relation import (
     SIGNAL_PREDICATES,
     DocumentRelation,
@@ -12,11 +13,13 @@ from evidence.document_relation import (
     UnsupportedRelationSignals,
     manifest_relation_signals,
     predicate_for_signal,
+    relations_affected_by_grain_rebuild,
     require_predicate_coverage,
     tree_relation_signals,
-    validate_relation_anchors,
+    validate_relation_grains,
 )
-from evidence.document_tree import DocumentTree, Node, NodeKind, walk_nodes
+from evidence.document_tree import DocumentTree
+from evidence.grain_compiler import compile_document_grains
 from evidence.loader import read_documents
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -35,13 +38,8 @@ def compile_fixture(tmp_path: Path, receipt_no: str, body: str) -> DocumentTree:
     )
 
 
-def node_of_kind(tree: DocumentTree, kind: NodeKind) -> Node:
-    return next(
-        node
-        for artifact in tree.artifacts
-        for node in walk_nodes(artifact.root)
-        if node.kind == kind
-    )
+def grains_by_id(*groups: tuple[DocumentGrain, ...]) -> dict[str, DocumentGrain]:
+    return {grain.grain_id: grain for group in groups for grain in group}
 
 
 def test_document_relation_defaults_to_whole_documents() -> None:
@@ -51,8 +49,9 @@ def test_document_relation_defaults_to_whole_documents() -> None:
         target_doc_id="exchange_20231231000001",
     )
 
-    assert relation.source_anchor is None
-    assert relation.target_anchor is None
+    assert relation.source_grain_ids == ()
+    assert relation.target_grain_ids == ()
+    validate_relation_grains(relation, grains_by_id={})
 
 
 def test_document_relation_rejects_self_relation_and_unknown_predicate() -> None:
@@ -93,38 +92,104 @@ def test_document_relation_requires_an_in_corpus_target() -> None:
         )
 
 
-def test_optional_anchors_must_resolve_to_nodes_in_their_document_trees(
+def test_optional_grain_endpoints_resolve_to_their_owning_documents(
     tmp_path: Path,
 ) -> None:
-    source_tree = compile_fixture(tmp_path, "20240101000001", "<P>source</P>")
+    source_tree = compile_fixture(
+        tmp_path,
+        "20240101000001",
+        "<P>source</P><TABLE><TR><TD>source table</TD></TR></TABLE>",
+    )
     target_tree = compile_fixture(
         tmp_path,
         "20231231000001",
-        "<TABLE><TR><TD>target</TD></TR></TABLE>",
+        "<P>target</P><TABLE><TR><TD>target table</TD></TR></TABLE>",
     )
-    source_paragraph = node_of_kind(source_tree, NodeKind.PARAGRAPH)
-    target_table = node_of_kind(target_tree, NodeKind.TABLE)
+    source_grains = compile_document_grains(source_tree)
+    target_grains = compile_document_grains(target_tree)
     relation = DocumentRelation(
         source_doc_id=source_tree.doc_id,
         predicate=RelationPredicate.TERMINATES,
         target_doc_id=target_tree.doc_id,
-        source_anchor=source_paragraph.source,
-        target_anchor=target_table.source,
+        source_grain_ids=(source_grains[0].grain_id,),
+        target_grain_ids=tuple(grain.grain_id for grain in target_grains),
     )
 
-    validate_relation_anchors(
+    validate_relation_grains(
         relation,
-        source_tree=source_tree,
-        target_tree=target_tree,
+        grains_by_id=grains_by_id(source_grains, target_grains),
     )
 
-    invalid = relation.model_copy(update={"target_anchor": source_paragraph.source})
-    with pytest.raises(ValueError, match="target_anchor is not a node"):
-        validate_relation_anchors(
-            invalid,
-            source_tree=source_tree,
-            target_tree=target_tree,
+    wrong_owner = relation.model_copy(update={"target_grain_ids": (source_grains[0].grain_id,)})
+    with pytest.raises(ValueError, match="owned by another document"):
+        validate_relation_grains(
+            wrong_owner,
+            grains_by_id=grains_by_id(source_grains, target_grains),
         )
+
+
+def test_grain_endpoints_reject_duplicates_stale_ids_and_wrong_order(
+    tmp_path: Path,
+) -> None:
+    source_tree = compile_fixture(
+        tmp_path,
+        "20240101000001",
+        "<P>source</P><TABLE><TR><TD>source table</TD></TR></TABLE>",
+    )
+    target_tree = compile_fixture(tmp_path, "20231231000001", "<P>target</P>")
+    source_grains = compile_document_grains(source_tree)
+    target_grains = compile_document_grains(target_tree)
+    assert len(source_grains) >= 2
+    inventory = grains_by_id(source_grains, target_grains)
+
+    with pytest.raises(ValidationError, match="must not contain duplicates"):
+        DocumentRelation(
+            source_doc_id=source_tree.doc_id,
+            source_grain_ids=(source_grains[0].grain_id, source_grains[0].grain_id),
+            predicate=RelationPredicate.REFERENCES,
+            target_doc_id=target_tree.doc_id,
+        )
+
+    stale = DocumentRelation(
+        source_doc_id=source_tree.doc_id,
+        source_grain_ids=("0" * 64,),
+        predicate=RelationPredicate.REFERENCES,
+        target_doc_id=target_tree.doc_id,
+    )
+    with pytest.raises(ValueError, match="unknown grain_id"):
+        validate_relation_grains(stale, grains_by_id=inventory)
+
+    wrong_order = DocumentRelation(
+        source_doc_id=source_tree.doc_id,
+        source_grain_ids=(source_grains[1].grain_id, source_grains[0].grain_id),
+        predicate=RelationPredicate.REFERENCES,
+        target_doc_id=target_tree.doc_id,
+    )
+    with pytest.raises(ValueError, match="follow document order"):
+        validate_relation_grains(wrong_order, grains_by_id=inventory)
+
+
+def test_grain_rebuild_invalidates_incoming_and_outgoing_relations() -> None:
+    outgoing = DocumentRelation(
+        source_doc_id="exchange_20240101000001",
+        predicate=RelationPredicate.REVISES,
+        target_doc_id="exchange_20231231000001",
+    )
+    incoming = DocumentRelation(
+        source_doc_id="exchange_20240201000001",
+        predicate=RelationPredicate.REFERENCES,
+        target_doc_id="exchange_20240101000001",
+    )
+    unrelated = DocumentRelation(
+        source_doc_id="major_20240301000001",
+        predicate=RelationPredicate.TERMINATES,
+        target_doc_id="major_20230201000001",
+    )
+
+    assert relations_affected_by_grain_rebuild(
+        (outgoing, incoming, unrelated),
+        {"exchange_20240101000001"},
+    ) == (outgoing, incoming)
 
 
 def test_tree_signals_find_corrections_and_related_disclosures(tmp_path: Path) -> None:

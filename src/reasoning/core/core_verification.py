@@ -13,6 +13,7 @@ from reasoning.computing.models import (
     ComputationStatus,
     OperandBindingResult,
 )
+from reasoning.core.evidence_adapters import verification_evidence_payload
 from reasoning.query_understanding.models import QueryUnderstanding
 from reasoning.retrieval.models import RetrievalSearchResult
 
@@ -68,7 +69,10 @@ class CoreVerificationService:
         if deterministic is not None:
             return deterministic
 
-        verifier = self.llm.with_structured_output(CoreVerificationResult)
+        verifier = self.llm.with_structured_output(
+            CoreVerificationResult,
+            method="json_schema",
+        )
         raw_result = await verifier.ainvoke(
             [
                 SystemMessage(content=_VERIFICATION_PROMPT),
@@ -77,9 +81,7 @@ class CoreVerificationService:
                         {
                             "question": question,
                             "query_understanding": understanding.model_dump(mode="json"),
-                            "retrieval_results": [
-                                result.model_dump(mode="json") for result in retrieval_results
-                            ],
+                            "retrieval_results": verification_evidence_payload(retrieval_results),
                             "computation_intent": computation_intent.model_dump(mode="json")
                             if computation_intent is not None
                             else None,

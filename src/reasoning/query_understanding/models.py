@@ -3,7 +3,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from reasoning.core_models import ComputationIntent
+from reasoning.core.core_models import ComputationIntent
+
+
+class QuerySafetyResult(BaseModel):
+    is_safe: bool
+    reason: str
 
 
 class ContextStatus(StrEnum):

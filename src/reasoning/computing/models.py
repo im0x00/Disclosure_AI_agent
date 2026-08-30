@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -48,7 +48,7 @@ class EvidenceReference(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     document_id: str
-    node_id: UUID
+    grain_id: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class Operand(BaseModel):
@@ -56,7 +56,7 @@ class Operand(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    operand_id: str = Field(min_length=1, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")
+    operand_id: str = Field(min_length=1)
     value: ComputationValue
     unit: str | None = None
     period: str | None = None
@@ -65,6 +65,8 @@ class Operand(BaseModel):
 
     @model_validator(mode="after")
     def reject_reserved_ids(self) -> Operand:
+        if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", self.operand_id) is None:
+            raise ValueError("operand_id must be an ASCII identifier")
         if self.operand_id in {"item", "index"}:
             raise ValueError("operand_id is reserved by the collection expression runtime")
         return self

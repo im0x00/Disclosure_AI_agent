@@ -3,7 +3,11 @@ import json
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from reasoning.core_models import ComputationIntent, VerificationIssue
+from reasoning.core.core_models import ComputationIntent, VerificationIssue
+from reasoning.core.evidence_adapters import (
+    binding_evidence_payload,
+    evidence_reference_pairs,
+)
 from reasoning.retrieval.models import RetrievalSearchResult
 
 from .executor import ComputationExecutor
@@ -48,23 +52,11 @@ class OperandBindingService:
         intent: ComputationIntent,
         retrieval_results: tuple[RetrievalSearchResult, ...],
     ) -> OperandBindingResult:
-        binder = self.llm.with_structured_output(OperandBindingResult)
-        evidence_payload = [
-            {
-                "operand_id": result.target.operand_id,
-                "need": result.target.need,
-                "evidence": [
-                    {
-                        "document_id": evidence.document_id,
-                        "node_id": str(evidence.node_id),
-                        "text": evidence.text,
-                        "metadata": evidence.metadata,
-                    }
-                    for evidence in result.search_results
-                ],
-            }
-            for result in retrieval_results
-        ]
+        binder = self.llm.with_structured_output(
+            OperandBindingResult,
+            method="json_schema",
+        )
+        evidence_payload = binding_evidence_payload(retrieval_results)
         raw_result = await binder.ainvoke(
             [
                 SystemMessage(content=_BINDER_SYSTEM_PROMPT),
@@ -90,18 +82,14 @@ class OperandBindingService:
         binding: OperandBindingResult,
     ) -> OperandBindingResult:
         required = {requirement.operand_id for requirement in intent.required_operands}
-        allowed_references = {
-            (evidence.document_id, evidence.node_id)
-            for result in retrieval_results
-            for evidence in result.search_results
-        }
+        allowed_references = evidence_reference_pairs(retrieval_results)
         valid_operands = tuple(
             operand
             for operand in binding.operands
             if operand.operand_id in required
             and operand.evidence_refs
             and all(
-                (reference.document_id, reference.node_id) in allowed_references
+                (reference.document_id, reference.grain_id) in allowed_references
                 for reference in operand.evidence_refs
             )
         )
@@ -123,7 +111,10 @@ class ComputationPlanningService:
         operands: tuple[Operand, ...],
         feedback: tuple[VerificationIssue, ...] = (),
     ) -> ComputationPlanningResult:
-        planner = self.llm.with_structured_output(ComputationPlanningResult)
+        planner = self.llm.with_structured_output(
+            ComputationPlanningResult,
+            method="json_schema",
+        )
         system_prompt = _PLANNER_SYSTEM_PROMPT.format(
             version=DSLVersion.V1,
             primitives=", ".join(primitive.value for primitive in Primitive),

@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "suite:development-mini-v1",
+  "world_id": "development-mini-v1",
+  "status": "development",
+  "description": "Fast-development evaluation suite bounded by eval/mini_world.json and its relation closure.",
+  "case_sources": [
+    {
+      "path": "cases/development_batch_01.jsonl",
+      "case_ids": [
+        "case:dev:contract:20250728800035:amount",
+        "case:dev:contract:20250728800035:end",
+        "case:dev:contract:20250728800035:ratio",
+        "case:dev:contract:20250728800035:recognized-revenue",
+        "case:dev:contracts:01412725:2025q3:count",
+        "case:dev:contracts:01412725:2025q3:sum",
+        "case:dev:contracts:01412725:2025q3:ranking",
+        "case:dev:contracts:01412725:2025q3:summary",
+        "case:dev:contracts:01412725:2025q3:recognized-revenue",
+        "case:dev:terminations:01412725:2025:exists",
+        "case:dev:terminations:01412725:2025:sum",
+        "case:dev:terminations:01412725:2025:summary",
+        "case:dev:facility:20251016800144:amount",
+        "case:dev:facility:20251016800144:end",
+        "case:dev:contract:20250728800035:summary"
+      ]
+    },
+    {
+      "path": "cases/mini_world_v1.jsonl",
+      "case_ids": [
+        "case:mw:samsung-contract:initial-counterparty",
+        "case:mw:samsung-contract:latest-counterparty",
+        "case:mw:samsung-contract:amount-changed",
+        "case:mw:samsung-contract:correction-summary",
+        "case:mw:samsung-contract:execution-rate",
+        "case:mw:doosan-sofc:latest-amount",
+        "case:mw:doosan-sofc:latest-end",
+        "case:mw:facility:hmm-vs-doosan:winner",
+        "case:mw:facility:hmm-vs-doosan:difference",
+        "case:mw:facility:hmm-doosan:paid",
+        "case:mw:woori-bond19:initial-amount",
+        "case:mw:woori-bond19:latest-amount",
+        "case:mw:woori-bond19:difference",
+        "case:mw:woori-bond19:percentage-change",
+        "case:mw:woori-2025-funded-bonds:count",
+        "case:mw:woori-2025-funded-bonds:total",
+        "case:mw:woori-2025-funded-bonds:summary",
+        "case:mw:woori-2025-funded-bonds:actual-use",
+        "case:mw:naver-wallapop:initial-close-date",
+        "case:mw:naver-wallapop:final-close-date",
+        "case:mw:naver-wallapop:final-amount",
+        "case:mw:naver-wallapop:price-decrease",
+        "case:mw:naver-wallapop:correction-summary",
+        "case:mw:naver-wallapop:seller-breakdown",
+        "case:mw:naver-mix:commerce-increased",
+        "case:mw:naver-mix:largest-increase",
+        "case:mw:naver-mix:business-change",
+        "case:mw:naver-mix:2025"
+      ]
+    }
+  ],
+  "case_count": 43,
+  "independent_oracle_cluster_count": 9,
+  "answerability_counts": {
+    "answerable": 36,
+    "unanswerable": 7
+  },
+  "response_mode_counts": {
+    "closed": 33,
+    "open": 10
+  },
+  "task_family_counts": {
+    "search_and_extraction": 13,
+    "multiple_retrieval_comparison_calculation": 19,
+    "complex_document_reasoning": 11
+  },
+  "capability_counts": {
+    "fact_lookup": 8,
+    "date_lookup": 3,
+    "ratio": 1,
+    "count": 2,
+    "sum": 5,
+    "ranking": 2,
+    "event_aggregation": 1,
+    "termination_check": 1,
+    "history_synthesis": 3,
+    "single_document_summary": 2,
+    "correction_aware_lookup": 4,
+    "exists": 1,
+    "comparison": 2,
+    "difference": 3,
+    "percentage_change": 1,
+    "fundraising_aggregation": 2,
+    "business_change_synthesis": 2
+  },
+  "policies": {
+    "oracle_first": true,
+    "question_is_derived_from_logical_query": true,
+    "question_variants_do_not_increase_independent_sample_count": true,
+    "grading": "deterministic_where_possible_claim_checklist_for_open",
+    "grain_mapping": "deferred_until_retrieval_contract",
+    "required_document_ids_must_resolve_inside_world": true
+  }
+}

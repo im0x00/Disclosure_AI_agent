@@ -7,12 +7,14 @@ from reasoning.computing.services import (
     ComputationService,
     OperandBindingService,
 )
-from reasoning.core_verification import CoreVerificationService
+from reasoning.core.core_graph import GraphDependencies, build_graph
+from reasoning.core.core_verification import CoreVerificationService
 from reasoning.generate_answer.services import ResponseGenerationService
-from reasoning.query_understanding.services import QueryUnderstandingService
+from reasoning.query_understanding.services import (
+    QuerySafetyGuardService,
+    QueryUnderstandingService,
+)
 from reasoning.retrieval.services import RetrievalService
-
-from .graph import GraphDependencies, build_graph
 
 DEFAULT_OUTPUT = Path("docs/main-graph.mmd")
 
@@ -47,6 +49,7 @@ def _visualization_dependencies() -> GraphDependencies:
 
     unused = object()
     return GraphDependencies(
+        query_safety=cast(QuerySafetyGuardService, unused),
         query_understanding=cast(QueryUnderstandingService, unused),
         retrieval=cast(RetrievalService, unused),
         operand_binding=cast(OperandBindingService, unused),
