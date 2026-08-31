@@ -89,7 +89,7 @@ async def _index(args: argparse.Namespace) -> None:
             ),
         )
         progress = _progress_reporter(
-            max_embedding_hours=args.max_embedding_hours,
+            target_embedding_hours=args.target_embedding_hours,
             throughput_gate_grains=args.throughput_gate_grains,
         )
         report = await indexer.index_pending(
@@ -127,31 +127,35 @@ def _print_progress(progress: EmbeddingIndexProgress) -> None:
 
 def _progress_reporter(
     *,
-    max_embedding_hours: float | None,
+    target_embedding_hours: float | None,
     throughput_gate_grains: int,
 ) -> Callable[[EmbeddingIndexProgress], None]:
-    if max_embedding_hours is not None and max_embedding_hours <= 0:
-        raise ValueError("max_embedding_hours must be positive")
+    if target_embedding_hours is not None and target_embedding_hours <= 0:
+        raise ValueError("target_embedding_hours must be positive")
     if throughput_gate_grains < 1:
         raise ValueError("throughput_gate_grains must be positive")
+    warned = False
 
     def report(progress: EmbeddingIndexProgress) -> None:
+        nonlocal warned
         _print_progress(progress)
         if (
-            max_embedding_hours is None
+            warned
+            or target_embedding_hours is None
             or progress.indexed < throughput_gate_grains
             or progress.eta_seconds is None
         ):
             return
         projected_seconds = progress.elapsed_seconds + progress.eta_seconds
-        allowed_seconds = max_embedding_hours * 3600
-        if projected_seconds > allowed_seconds:
-            raise RuntimeError(
-                "projected embedding time exceeds the configured limit: "
+        target_seconds = target_embedding_hours * 3600
+        if projected_seconds > target_seconds:
+            print(
+                "stage=index-advisory projected embedding time exceeds target: "
                 f"projected={_duration(projected_seconds)} "
-                f"limit={_duration(allowed_seconds)}; committed rows are reusable, "
-                "restart the same scope on a faster device"
+                f"target={_duration(target_seconds)}; indexing will continue",
+                flush=True,
             )
+            warned = True
 
     return report
 
@@ -198,7 +202,13 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
     )
-    index.add_argument("--max-embedding-hours", type=float)
+    index.add_argument(
+        "--target-embedding-hours",
+        "--max-embedding-hours",
+        dest="target_embedding_hours",
+        type=float,
+        help="Advisory ETA target; exceeding it never stops indexing.",
+    )
     index.add_argument("--throughput-gate-grains", type=int, default=2048)
     index.add_argument("--mini-world", type=Path)
     index.add_argument("--manifest", type=Path, default=Path("corpus/manifest.jsonl"))
